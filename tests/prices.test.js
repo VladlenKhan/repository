@@ -116,11 +116,25 @@ describe('getQuote', () => {
 
 describe('getCandlesCached', () => {
   it('отдаёт кэш, не трогая сеть', async () => {
-    storage.getCachedCandles.mockResolvedValueOnce([{ close: 1 }]);
+    storage.getCachedCandles.mockResolvedValueOnce([{ time: 1000, close: 1 }]);
     const result = await getCandlesCached({ timeframe: '1h', limit: 10, provider });
 
-    expect(result).toEqual([{ close: 1 }]);
+    expect(result).toEqual([{ time: 1000, close: 1 }]);
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('чинит повторы, уже лежащие в кэше', async () => {
+    // Записи, сохранённые до появления нормализации, живут до истечения
+    // срока — их нужно приводить в порядок при чтении.
+    storage.getCachedCandles.mockResolvedValueOnce([
+      { time: 2000, close: 2 },
+      { time: 1000, close: 1 },
+      { time: 1000, close: 9 },
+    ]);
+
+    const result = await getCandlesCached({ timeframe: '1day', limit: 10, provider });
+
+    expect(result.map((c) => c.time)).toEqual([1000, 2000]);
   });
 
   it('идёт в сеть и кладёт результат в кэш при промахе', async () => {
