@@ -314,7 +314,7 @@ describe('/alert', () => {
   it('подсказывает формат без аргумента', async () => {
     await bot.handleUpdate(commandUpdate('/alert'));
 
-    expect(lastText()).toContain('/alert 2400');
+    expect(lastText()).toContain('/alert 4200');
     expect(fetch).not.toHaveBeenCalled();
   });
 
