@@ -1,0 +1,17 @@
+# Конфигурация Netlify. Сайта как такового нет — только функции.
+
+[build]
+  # Публиковать нечего, поэтому указываем пустую папку.
+  publish = "public"
+  functions = "netlify/functions"
+
+[build.environment]
+  # @netlify/blobs 11.x требует Node 22.12+
+  NODE_VERSION = "22.12.0"
+
+[functions]
+  # esbuild собирает ES-модули заметно быстрее дефолтного бандлера
+  node_bundler = "esbuild"
+
+[dev]
+  framework = "#static"
