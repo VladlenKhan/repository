@@ -98,7 +98,10 @@ afterEach(() => {
 });
 
 /** Последний текст, отправленный ботом. */
-const lastText = () => sent.at(-1)?.payload?.text ?? '';
+const lastText = () => sent.filter((c) => c.payload?.text).at(-1)?.payload?.text ?? '';
+
+/** Последний исходящий вызов. */
+const lastSent = () => sent.at(-1);
 
 describe('/start', () => {
   it('здоровается и показывает список команд', async () => {
@@ -111,6 +114,42 @@ describe('/start', () => {
     settings.lang = 'en';
     await bot.handleUpdate(commandUpdate('/start'));
     expect(lastText()).toContain('market breakdown');
+  });
+});
+
+describe('кнопка веб-версии', () => {
+  beforeEach(() => vi.stubEnv('URL', 'https://example.netlify.app'));
+
+  it('/start ставит кнопку меню в чате', async () => {
+    // Глобальная установка Telegram не применяется — её перекрывает
+    // настройка из BotFather, поэтому кнопка ставится каждому чату.
+    await bot.handleUpdate(commandUpdate('/start'));
+
+    const call = sent.find((c) => c.method === 'setChatMenuButton');
+    expect(call).toBeDefined();
+    expect(call.payload.chat_id).toBe(42);
+    expect(call.payload.menu_button.type).toBe('web_app');
+    expect(call.payload.menu_button.web_app.url).toContain('example.netlify.app');
+  });
+
+  it('/start добавляет инлайн-кнопку веб-версии', async () => {
+    await bot.handleUpdate(commandUpdate('/start'));
+
+    const reply = sent.find((c) => c.method === 'sendMessage');
+    expect(JSON.stringify(reply.payload.reply_markup)).toContain('web_app');
+  });
+
+  it('/app присылает кнопку', async () => {
+    await bot.handleUpdate(commandUpdate('/app'));
+    expect(JSON.stringify(lastSent().payload.reply_markup)).toContain('web_app');
+  });
+
+  it('без заданного адреса сайта бот не падает', async () => {
+    vi.stubEnv('URL', '');
+    await bot.handleUpdate(commandUpdate('/start'));
+
+    // Приветствие всё равно отправлено, просто без кнопки.
+    expect(lastText()).toContain('Влад');
   });
 });
 
