@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /** Простое хранилище аккаунтов в памяти вместо Blobs. */
@@ -152,6 +153,76 @@ describe('вход', () => {
       authRequest({ action: 'login', login: 'VLAD', password: ADMIN_PASSWORD }),
     );
     expect((await response.json()).account.role).toBe('admin');
+  });
+});
+
+describe('вход через Telegram', () => {
+  const ADMIN_TG = 1345915209;
+  const BOT_TOKEN = '1:T';
+
+  /** Подписывает данные так же, как Telegram. */
+  function signInitData(user, token = BOT_TOKEN) {
+    const fields = {
+      auth_date: String(Math.floor(Date.now() / 1000)),
+      user: JSON.stringify(user),
+    };
+    const pairs = Object.entries(fields).map(([k, v]) => `${k}=${v}`).sort();
+    const secret = createHmac('sha256', 'WebAppData').update(token).digest();
+    const hash = createHmac('sha256', secret).update(pairs.join('\n')).digest('hex');
+    return new URLSearchParams({ ...fields, hash }).toString();
+  }
+
+  beforeEach(() => {
+    vi.stubEnv('ADMIN_TELEGRAM_ID', String(ADMIN_TG));
+  });
+
+  it('владелец получает роль администратора', async () => {
+    const initData = signInitData({ id: ADMIN_TG, first_name: 'Влад', username: 'vlad' });
+    const response = await authFn(authRequest({ action: 'telegram', initData }));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.account.role).toBe('admin');
+  });
+
+  it('остальные получают роль пользователя', async () => {
+    const initData = signInitData({ id: 777, first_name: 'Вася' });
+    const body = await (await authFn(authRequest({ action: 'telegram', initData }))).json();
+
+    expect(body.account.role).toBe('user');
+  });
+
+  it('подмена Telegram ID на админский не проходит', async () => {
+    // Главная атака: взять свои подписанные данные и заменить в них ID
+    // на идентификатор владельца.
+    const mine = signInitData({ id: 777, first_name: 'Вася' });
+    const tampered = mine.replace('777', String(ADMIN_TG));
+
+    const response = await authFn(authRequest({ action: 'telegram', initData: tampered }));
+    expect(response.status).toBe(401);
+  });
+
+  it('данные, подписанные чужим токеном, не принимаются', async () => {
+    const forged = signInitData({ id: ADMIN_TG, first_name: 'Влад' }, '999:ЧУЖОЙ');
+    expect((await authFn(authRequest({ action: 'telegram', initData: forged }))).status).toBe(401);
+  });
+
+  it('повторный вход не плодит аккаунты и сохраняет дату регистрации', async () => {
+    const initData = signInitData({ id: 777, first_name: 'Вася' });
+
+    const first = await (await authFn(authRequest({ action: 'telegram', initData }))).json();
+    await new Promise((r) => setTimeout(r, 5));
+    const second = await (await authFn(authRequest({ action: 'telegram', initData }))).json();
+
+    expect(accounts.size).toBe(1);
+    expect(second.account.createdAt).toBe(first.account.createdAt);
+  });
+
+  it('у аккаунта из Telegram нет пароля', async () => {
+    const initData = signInitData({ id: 777, first_name: 'Вася' });
+    await authFn(authRequest({ action: 'telegram', initData }));
+
+    expect(accounts.get('tg777').passwordHash).toBeUndefined();
   });
 });
 

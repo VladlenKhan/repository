@@ -47,6 +47,17 @@ async function main() {
   });
   console.log(`✅ Вебхук зарегистрирован: ${url}`);
 
+  // Постоянная кнопка рядом с полем ввода: открывает веб-версию
+  // как мини-приложение, не выходя из Telegram.
+  await callTelegram(token, 'setChatMenuButton', {
+    menu_button: {
+      type: 'web_app',
+      text: 'Веб-версия',
+      web_app: { url: `${getSiteUrl()}/` },
+    },
+  });
+  console.log('✅ Кнопка «Веб-версия» добавлена в меню бота');
+
   const me = await callTelegram(token, 'getMe', {});
   console.log(`\nБот: @${me.username}`);
   console.log(

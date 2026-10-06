@@ -500,3 +500,42 @@ footer {
   #chart { height: 320px; }
   .chart-keys { display: none; }
 }
+
+
+/* ---------- Вход через Telegram ---------- */
+
+.or {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0 14px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.or::before,
+.or::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.tg-btn {
+  display: block;
+  width: 100%;
+  text-align: center;
+  text-decoration: none;
+  border-color: #229ed9;
+  color: #229ed9;
+}
+
+.tg-btn:hover { background: rgba(34, 158, 217, 0.1); border-color: #229ed9; }
+
+/* Внутри Telegram форма с паролем не нужна */
+body.in-telegram .auth-card .tabs,
+body.in-telegram .auth-card .field,
+body.in-telegram .auth-card #submit-auth,
+body.in-telegram .auth-card .or,
+body.in-telegram .auth-card .auth-hint,
+body.in-telegram .topbar { display: none; }

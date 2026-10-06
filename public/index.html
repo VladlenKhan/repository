@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Aurum — аналитика золота</title>
   <meta name="description" content="Аналитика по золоту XAU/USD: индикаторы, уровни, макрофон и уведомления о цене в Telegram." />
+  <!-- SDK мини-приложений Telegram: отдаёт подписанный профиль
+       пользователя, когда страница открыта кнопкой из бота -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <link rel="stylesheet" href="/styles.css" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🪙</text></svg>" />
 </head>
@@ -130,6 +133,11 @@
         <input class="field" id="password" type="password" placeholder="Пароль" autocomplete="current-password" />
 
         <button class="btn btn-primary" id="submit-auth" style="width:100%">Войти</button>
+
+        <div class="or"><span>или</span></div>
+        <a class="btn tg-btn" id="open-in-telegram" href="https://t.me/aurumtr_bot" target="_blank" rel="noopener">
+          Войти через Telegram
+        </a>
         <p class="error" id="auth-error"></p>
         <p class="muted auth-hint" id="auth-hint">Логин: латиница, цифры, дефис. Пароль: от восьми символов.</p>
       </div>

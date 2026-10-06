@@ -4,7 +4,11 @@
  * POST /api/auth  { action: 'register' | 'login', login, password }
  * Ответ: { token, account } или { error }
  */
-import { login as doLogin, register as doRegister } from '../../lib/accounts.js';
+import {
+  login as doLogin,
+  loginWithTelegram,
+  register as doRegister,
+} from '../../lib/accounts.js';
 import { ConfigError } from '../../lib/config.js';
 
 const json = (body, status = 200) =>
@@ -22,10 +26,14 @@ export default async (request) => {
   if (!body) return json({ error: 'Некорректный запрос' }, 400);
 
   try {
-    const result =
-      body.action === 'register'
-        ? await doRegister(body.login, body.password)
-        : await doLogin(body.login, body.password);
+    let result;
+    if (body.action === 'telegram') {
+      result = await loginWithTelegram(body.initData);
+    } else if (body.action === 'register') {
+      result = await doRegister(body.login, body.password);
+    } else {
+      result = await doLogin(body.login, body.password);
+    }
 
     if (!result.ok) {
       // Задержка замедляет перебор логинов и паролей.

@@ -469,11 +469,66 @@ for (const id of ['login', 'password']) {
   });
 }
 
+/* ======================= Вход через Telegram ======================= */
+
+/**
+ * Страница, открытая кнопкой из бота, получает от Telegram строку
+ * initData с подписанным профилем. Её наличие и означает, что мы
+ * внутри мини-приложения.
+ */
+function telegramInitData() {
+  const webApp = window.Telegram?.WebApp;
+  return webApp?.initData && webApp.initData.length > 0 ? webApp.initData : null;
+}
+
+/** Автоматический вход внутри Telegram — пароль не нужен. */
+async function loginWithTelegram(initData) {
+  try {
+    const response = await fetch(API_AUTH, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'telegram', initData }),
+    });
+
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      $('auth-error').textContent = body.error ?? 'Telegram не подтвердил вход';
+      show('auth-view');
+      return;
+    }
+
+    state.token = body.token;
+    state.account = body.account;
+    writeToken(body.token);
+    setChartToken(body.token);
+
+    renderAccount();
+    openPanel();
+  } catch {
+    $('auth-error').textContent = 'Сеть недоступна';
+    show('auth-view');
+  }
+}
+
 /* ======================= Запуск ======================= */
 
 (function init() {
   renderAccount();
   syncAuthMode();
+
+  // Внутри Telegram: разворачиваем окно, прячем форму с паролем
+  // и входим по подписанному профилю.
+  const initData = telegramInitData();
+  if (initData) {
+    document.body.classList.add('in-telegram');
+    window.Telegram.WebApp.ready();
+    window.Telegram.WebApp.expand();
+
+    $('auth-note').textContent = 'Входим через Telegram…';
+    show('auth-view');
+    loginWithTelegram(initData);
+    return;
+  }
 
   // Токен из прошлой сессии: пробуем сразу открыть панель.
   // Если он протух, сервер ответит 401 и нас вернёт на форму входа.
