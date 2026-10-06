@@ -146,3 +146,45 @@ describe('getCandlesCached', () => {
     expect(storage.getCachedCandles).toHaveBeenCalledWith('twelvedata:XAU/USD:4h:300');
   });
 });
+
+describe('normalizeSeries', () => {
+  it('убирает повторы по времени', async () => {
+    // Twelve Data на дневном таймфрейме присылает одну дату дважды.
+    const { normalizeSeries } = await import('../lib/prices.js');
+    const result = normalizeSeries([
+      { time: 1000, close: 1 },
+      { time: 1000, close: 2 },
+      { time: 2000, close: 3 },
+    ]);
+
+    expect(result).toHaveLength(2);
+    expect(result.map((c) => c.time)).toEqual([1000, 2000]);
+  });
+
+  it('из повторов оставляет более свежую запись', async () => {
+    const { normalizeSeries } = await import('../lib/prices.js');
+    const result = normalizeSeries([
+      { time: 1000, close: 1 },
+      { time: 1000, close: 2 },
+    ]);
+
+    expect(result[0].close).toBe(2);
+  });
+
+  it('упорядочивает по возрастанию времени', async () => {
+    const { normalizeSeries } = await import('../lib/prices.js');
+    const result = normalizeSeries([
+      { time: 3000, close: 3 },
+      { time: 1000, close: 1 },
+      { time: 2000, close: 2 },
+    ]);
+
+    expect(result.map((c) => c.time)).toEqual([1000, 2000, 3000]);
+  });
+
+  it('не трогает уже корректный ряд', async () => {
+    const { normalizeSeries } = await import('../lib/prices.js');
+    const input = [{ time: 1000, close: 1 }, { time: 2000, close: 2 }];
+    expect(normalizeSeries(input)).toEqual(input);
+  });
+});

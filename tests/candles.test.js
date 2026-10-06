@@ -116,6 +116,32 @@ describe('формат данных для графика', () => {
   });
 });
 
+describe('дубликаты в ответе поставщика', () => {
+  it('дневной ряд остаётся строго возрастающим', async () => {
+    // Twelve Data присылает одну и ту же дату дважды на 1day.
+    // Библиотека графика на повторе выбрасывает ошибку.
+    fetch.mockResolvedValue({
+      ok: true, status: 200,
+      json: async () => ({
+        status: 'ok',
+        values: [
+          { datetime: '2026-10-07', open: '4100', high: '4110', low: '4090', close: '4105' },
+          { datetime: '2026-10-06', open: '4090', high: '4100', low: '4080', close: '4095' },
+          { datetime: '2026-10-04', open: '4080', high: '4090', low: '4070', close: '4085' },
+          { datetime: '2026-10-04', open: '4080', high: '4090', low: '4070', close: '4085' },
+        ],
+      }),
+    });
+
+    const body = await (await candlesFn(request(userToken, '1day'))).json();
+
+    expect(body.candles).toHaveLength(3);
+    for (let i = 1; i < body.candles.length; i++) {
+      expect(body.candles[i].time).toBeGreaterThan(body.candles[i - 1].time);
+    }
+  });
+});
+
 describe('таймфреймы', () => {
   it('запрашивает указанный таймфрейм', async () => {
     await candlesFn(request(userToken, '4h'));
