@@ -3,26 +3,33 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Aurum — аналитика золота в Telegram</title>
-  <meta name="description" content="Телеграм-бот с аналитикой по золоту XAU/USD: индикаторы, уровни, макрофон, уведомления о цене. Работает на Netlify Functions." />
+  <title>Aurum — аналитика золота</title>
+  <meta name="description" content="Аналитика по золоту XAU/USD: индикаторы, уровни, макрофон и уведомления о цене в Telegram." />
   <link rel="stylesheet" href="/styles.css" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🪙</text></svg>" />
 </head>
 <body>
 
+<!-- Верхняя панель: слева название, справа аккаунт -->
+<nav class="topbar">
+  <div class="wrap topbar-inner">
+    <a class="brand" href="#">🪙 Aurum</a>
+    <div class="account" id="account-area">
+      <button class="btn btn-sm" id="open-auth">Войти</button>
+    </div>
+  </div>
+</nav>
+
 <header>
   <div class="wrap">
-    <span class="badge">Учебный проект · открытый код</span>
-    <h1>Aurum — аналитика золота<br />прямо в Telegram</h1>
+    <h1>Аналитика золота<br />в Telegram</h1>
     <p class="lead">
-      Бот считает технические индикаторы по XAU/USD, показывает уровни поддержки
-      и сопротивления, следит за макрофоном и присылает уведомление, когда цена
-      пересекает заданный уровень.
+      Технические индикаторы по XAU/USD, уровни поддержки и сопротивления,
+      макроэкономический фон и уведомление, когда цена пересекает нужный уровень.
     </p>
     <div class="actions">
       <a class="btn btn-primary" href="https://t.me/aurumtr_bot" target="_blank" rel="noopener">Открыть бота</a>
-      <a class="btn" href="https://github.com/VladlenKhan/repository" target="_blank" rel="noopener">Исходный код</a>
-      <button class="btn" id="open-panel">Панель управления</button>
+      <button class="btn" id="hero-register">Создать аккаунт</button>
     </div>
   </div>
 </header>
@@ -32,40 +39,38 @@
 
   <section>
     <div class="wrap">
-      <h2>Что умеет</h2>
-      <p class="section-note">
-        Пять возможностей, каждая отвечает на свой вопрос о рынке.
-      </p>
+      <h2>Возможности</h2>
+      <p class="section-note">Шесть инструментов, каждый отвечает на свой вопрос о рынке.</p>
       <div class="grid">
         <div class="card">
           <div class="card-icon">📈</div>
           <h3>Технический анализ</h3>
-          <p>EMA 50 и 200, RSI(14), ATR(14) и определение тренда на четырёх таймфреймах — от 15 минут до дня.</p>
+          <p>EMA 50 и 200, RSI(14), ATR(14), определение тренда. Четыре таймфрейма — от 15 минут до дня.</p>
         </div>
         <div class="card">
           <div class="card-icon">📐</div>
           <h3>Уровни цены</h3>
-          <p>Классические пивот-точки R3…S3 по дневной и четырёхчасовой свече. В разборе показываются ближайшие к текущей цене.</p>
+          <p>Пивот-уровни R3…S3 по дневной и четырёхчасовой свече. В разборе показываются ближайшие к цене.</p>
         </div>
         <div class="card">
           <div class="card-icon">🏛</div>
           <h3>Макрофон</h3>
-          <p>Реальная доходность 10-летних облигаций США из базы ФРС и объяснение, как она связана с золотом.</p>
+          <p>Реальная доходность 10-летних облигаций США и объяснение, как она связана с золотом.</p>
         </div>
         <div class="card">
           <div class="card-icon">🔔</div>
           <h3>Уведомления</h3>
-          <p>Сообщение, когда цена достигнет заданного уровня. Направление определяется при создании, проверка — каждые 15 минут.</p>
+          <p>Сообщение, когда цена достигнет заданного уровня. Проверка каждые 15 минут.</p>
         </div>
         <div class="card">
           <div class="card-icon">☀️</div>
           <h3>Утренняя сводка</h3>
-          <p>Разбор рынка подписчикам по будням в 06:00 UTC. Один запрос к API на всю рассылку.</p>
+          <p>Разбор рынка по будням в 06:00 UTC для подписчиков.</p>
         </div>
         <div class="card">
           <div class="card-icon">🌍</div>
           <h3>Два языка</h3>
-          <p>Русский и английский с переключением командой. Выбор запоминается между сессиями.</p>
+          <p>Русский и английский с переключением одной командой.</p>
         </div>
       </div>
     </div>
@@ -74,14 +79,14 @@
   <section>
     <div class="wrap">
       <h2>Команды</h2>
-      <p class="section-note">Одиннадцать команд. Таймфреймы понимают и привычные сокращения: <code>H1</code>, <code>M15</code>, <code>4H</code>, <code>D1</code>.</p>
+      <p class="section-note">Таймфреймы понимают привычные сокращения: <code>H1</code>, <code>M15</code>, <code>4H</code>, <code>D1</code>.</p>
       <div class="table-wrap">
         <table>
           <thead><tr><th>Команда</th><th>Что делает</th></tr></thead>
           <tbody>
             <tr><td><code>/start</code></td><td>приветствие и список команд</td></tr>
             <tr><td><code>/analysis [тф]</code></td><td>разбор рынка: цена, тренд, индикаторы, уровни, сессия</td></tr>
-            <tr><td><code>/levels</code></td><td>полный набор пивот-уровней на D1 и H4</td></tr>
+            <tr><td><code>/levels</code></td><td>полный набор уровней на D1 и H4</td></tr>
             <tr><td><code>/macro</code></td><td>реальная доходность США и её влияние на золото</td></tr>
             <tr><td><code>/subscribe</code></td><td>подписка на утреннюю сводку</td></tr>
             <tr><td><code>/unsubscribe</code></td><td>отмена подписки</td></tr>
@@ -98,94 +103,38 @@
 
   <section>
     <div class="wrap">
-      <h2>Как устроено</h2>
-      <p class="section-note">
-        Постоянно запущенного сервера нет. Код просыпается на входящий запрос
-        от Telegram или по расписанию, отрабатывает за секунды и засыпает.
-      </p>
-      <pre class="diagram">
-   Пользователь
-        │  /analysis 4h
-        ▼
-   <b>Telegram</b> ──webhook──▶ <b>Netlify Function</b> (bot.mjs)
-                                   │
-                    ┌──────────────┼──────────────┐
-                    ▼              ▼              ▼
-             <b>Twelve Data</b>      <b>FRED</b>      <b>Netlify Blobs</b>
-            цены и свечи      макроданные     настройки, алерты,
-                                              кэш свечей
-
-   По расписанию, без участия пользователя:
-     <b>alerts.mjs</b>    каждые 15 минут  →  проверка уведомлений
-     <b>morning.mjs</b>   будни 06:00 UTC  →  рассылка сводки</pre>
-
-      <div class="grid" style="margin-top:20px">
-        <div class="card">
-          <h3>Расчёты отделены от сети</h3>
-          <p>Индикаторы, уровни, сессии и сборка сообщений — чистые функции. Не ходят в сеть и не знают про Telegram, поэтому тестируются без единого мока.</p>
-        </div>
-        <div class="card">
-          <h3>Источник данных за адаптером</h3>
-          <p>Чтобы добавить OANDA или Finnhub, достаточно написать функцию с теми же методами. Остальной код не меняется.</p>
-        </div>
-        <div class="card">
-          <h3>Кэш бережёт лимит API</h3>
-          <p>Свечи живут в хранилище четверть таймфрейма. Двадцать запросов <code>/analysis</code> подряд стоят один кредит из восьмисот дневных.</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <section>
-    <div class="wrap">
-      <h2>Технические решения</h2>
-      <p class="section-note">
-        Несколько находок, обнаруженных при разработке — они видны в коде и в истории коммитов.
-      </p>
+      <h2>С чего начать</h2>
       <div class="grid">
-        <div class="card">
-          <h3>bot.catch не работает в webhook</h3>
-          <p>В исходниках grammY обработчик ошибок вызывается только из пути long polling. Вебхук пробрасывает ошибку наружу, что дало бы 500 и повторную доставку апдейта — то есть дубли сообщений. Заменено на errorBoundary.</p>
-        </div>
-        <div class="card">
-          <h3>Секрет проверяется до grammY</h3>
-          <p>Библиотека сверяет секретный токен уже после сетевого запроса getMe. Своя проверка заголовка стоит раньше, поэтому чужой запрос отбивается без обращения в сеть.</p>
-        </div>
-        <div class="card">
-          <h3>Лимит API приходит под HTTP 200</h3>
-          <p>Twelve Data при исчерпании кредитов отвечает успешным кодом, пряча ошибку в теле ответа. Проверять <code>response.ok</code> недостаточно.</p>
-        </div>
-        <div class="card">
-          <h3>Сначала удалить, потом отправить</h3>
-          <p>Сработавший алерт убирается из хранилища до отправки уведомления. При обратном порядке сбой записи превратился бы в рассылку одного и того же каждые 15 минут.</p>
-        </div>
+        <div class="card"><h3>1. Откройте бота</h3><p>Нажмите «Открыть бота» и отправьте <code>/start</code>.</p></div>
+        <div class="card"><h3>2. Посмотрите рынок</h3><p>Команда <code>/analysis</code> покажет текущую картину.</p></div>
+        <div class="card"><h3>3. Поставьте уведомление</h3><p><code>/alert 4200</code> — и бот напишет, когда цена дойдёт до уровня.</p></div>
       </div>
     </div>
   </section>
 
+</main>
+
+<!-- ===================== ВХОД ===================== -->
+<main id="auth-view" class="hidden">
   <section>
     <div class="wrap">
-      <h2>Стек</h2>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Технология</th><th>Роль</th><th>Почему</th></tr></thead>
-          <tbody>
-            <tr><td>grammY</td><td>Telegram-бот</td><td>режим webhook через стандартные Request и Response</td></tr>
-            <tr><td>Netlify Functions v2</td><td>хостинг</td><td>serverless, без управления серверами</td></tr>
-            <tr><td>Netlify Blobs</td><td>хранилище</td><td>key-value, не требует соединений — важно для serverless</td></tr>
-            <tr><td>trading-signals</td><td>индикаторы</td><td>нативный ESM, ноль зависимостей, активно развивается</td></tr>
-            <tr><td>Twelve Data</td><td>цены</td><td>XAU/USD доступен на бесплатном тарифе</td></tr>
-            <tr><td>FRED</td><td>макроданные</td><td>официальный источник ФРС</td></tr>
-            <tr><td>Vitest</td><td>тесты</td><td>155 тестов, вся сеть замокана</td></tr>
-          </tbody>
-        </table>
+      <div class="card auth-card">
+        <div class="tabs">
+          <button class="tab active" data-mode="login">Вход</button>
+          <button class="tab" data-mode="register">Регистрация</button>
+        </div>
+
+        <p class="muted" id="auth-note">Войдите, чтобы видеть рыночные данные.</p>
+
+        <input class="field" id="login" type="text" placeholder="Логин" autocomplete="username" />
+        <input class="field" id="password" type="password" placeholder="Пароль" autocomplete="current-password" />
+
+        <button class="btn btn-primary" id="submit-auth" style="width:100%">Войти</button>
+        <p class="error" id="auth-error"></p>
+        <p class="muted auth-hint" id="auth-hint">Логин: латиница, цифры, дефис. Пароль: от восьми символов.</p>
       </div>
-      <p class="muted" style="margin-top:18px">
-        Три зависимости в продакшене. Ни одного фреймворка на фронтенде — эта страница написана на чистом HTML, CSS и JavaScript.
-      </p>
     </div>
   </section>
-
 </main>
 
 <!-- ===================== ПАНЕЛЬ ===================== -->
@@ -195,65 +144,49 @@
 
       <div class="panel-head">
         <div>
-          <h2 style="margin:0">Панель управления</h2>
-          <p class="muted" style="margin:4px 0 0" id="updated-at">—</p>
-        </div>
-        <div class="actions">
-          <button class="btn" id="refresh">Обновить</button>
-          <button class="btn" id="logout">Выйти</button>
+          <h2 style="margin:0">Панель</h2>
+          <p class="muted live" style="margin:4px 0 0">
+            <span class="pulse"></span><span id="updated-at">обновляется…</span>
+          </p>
         </div>
       </div>
 
-      <!-- Вход -->
-      <div class="card" id="login-card">
-        <h3>Вход</h3>
-        <p>Панель показывает данные пользователей бота, поэтому закрыта паролем.</p>
-        <input class="field" id="password" type="password" placeholder="Пароль" autocomplete="current-password" />
-        <button class="btn btn-primary" id="login" style="width:100%">Войти</button>
-        <p class="error" id="login-error"></p>
-      </div>
+      <!-- Видно всем, кто вошёл -->
+      <h3>Рынок</h3>
+      <div class="grid" id="market"></div>
+      <div class="table-wrap" style="margin-top:16px"><table id="pivots-table"></table></div>
 
-      <!-- Данные -->
-      <div id="dashboard" class="hidden">
-
-        <h3>Состояние системы</h3>
-        <div class="grid" id="health"></div>
-
+      <!-- Только администратор -->
+      <div id="admin-only" class="hidden">
         <div class="subsection">
-          <h3>Рынок</h3>
-          <div class="grid" id="market"></div>
-          <div class="table-wrap" style="margin-top:16px">
-            <table id="pivots-table"></table>
-          </div>
+          <h3>Состояние системы</h3>
+          <div class="grid" id="health"></div>
         </div>
 
         <div class="subsection">
-          <h3>Уведомления о цене</h3>
+          <h3>Уведомления пользователей</h3>
           <div class="table-wrap"><table id="alerts-table"></table></div>
         </div>
 
         <div class="subsection">
-          <h3>Пользователи</h3>
+          <h3>Пользователи бота</h3>
           <div class="table-wrap"><table id="users-table"></table></div>
         </div>
 
-        <p class="error" id="panel-error"></p>
+        <div class="subsection">
+          <h3>Аккаунты сайта</h3>
+          <div class="table-wrap"><table id="accounts-table"></table></div>
+        </div>
       </div>
 
+      <p class="error" id="panel-error"></p>
     </div>
   </section>
 </main>
 
 <footer>
   <div class="wrap">
-    <p>
-      <a href="https://t.me/aurumtr_bot" target="_blank" rel="noopener">@aurumtr_bot</a> ·
-      <a href="https://github.com/VladlenKhan/repository" target="_blank" rel="noopener">GitHub</a>
-    </p>
-    <div class="disclaimer">
-      Учебный проект. Бот показывает расчёты по открытым данным и ничего не советует.
-      <strong>Это не финансовая рекомендация.</strong>
-    </div>
+    <p><a href="https://t.me/aurumtr_bot" target="_blank" rel="noopener">@aurumtr_bot</a></p>
   </div>
 </footer>
 

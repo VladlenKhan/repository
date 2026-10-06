@@ -1,79 +1,236 @@
 /* ===========================================================================
-   Логика панели управления.
+   Логика сайта: вход, роли и автообновление панели.
 
-   Без фреймворков: получаем JSON от /api/admin и собираем разметку руками.
-   Пароль хранится в sessionStorage — он живёт до закрытия вкладки и,
-   в отличие от localStorage, не остаётся на чужом компьютере навсегда.
+   Без фреймворков — HTML собирается строками, состояние лежит в одном
+   объекте. Токен сессии хранится в localStorage, чтобы вход переживал
+   перезагрузку страницы.
    =========================================================================== */
 
-const API = '/api/admin';
-const STORAGE_KEY = 'aurum-admin-password';
+const API_AUTH = '/api/auth';
+const API_DATA = '/api/data';
+const TOKEN_KEY = 'aurum-token';
+
+/** Как часто панель перезапрашивает данные. */
+const REFRESH_MS = 20000;
 
 const $ = (id) => document.getElementById(id);
 
-/* ---------- Переключение витрины и панели ---------- */
+/** Единое состояние вместо разбросанных переменных. */
+const state = {
+  token: null,
+  account: null,
+  mode: 'login',
+  timer: null,
+  lastUpdate: null,
+  tickTimer: null,
+};
 
-function showPanel() {
-  $('public-view').classList.add('hidden');
-  $('panel-view').classList.remove('hidden');
-  window.scrollTo(0, 0);
+/* ======================= Хранение токена ======================= */
 
-  // Если пароль уже вводили в этой вкладке — сразу грузим данные.
-  const saved = readPassword();
-  if (saved) load(saved);
-}
-
-function showPublic() {
-  $('panel-view').classList.add('hidden');
-  $('public-view').classList.remove('hidden');
-  window.scrollTo(0, 0);
-}
-
-/* ---------- Хранение пароля ---------- */
-
-function readPassword() {
+function readToken() {
   try {
-    return sessionStorage.getItem(STORAGE_KEY);
+    return localStorage.getItem(TOKEN_KEY);
   } catch {
     // Приватный режим браузера может запрещать доступ к хранилищу.
     return null;
   }
 }
 
-function writePassword(value) {
+function writeToken(value) {
   try {
-    if (value === null) sessionStorage.removeItem(STORAGE_KEY);
-    else sessionStorage.setItem(STORAGE_KEY, value);
+    if (value === null) localStorage.removeItem(TOKEN_KEY);
+    else localStorage.setItem(TOKEN_KEY, value);
   } catch {
-    /* Не критично: просто придётся вводить пароль заново. */
+    /* Не критично: вход просто не переживёт перезагрузку. */
   }
 }
 
-/* ---------- Запрос данных ---------- */
+/* ======================= Переключение экранов ======================= */
 
-async function load(password) {
-  $('login-error').textContent = '';
-  $('panel-error').textContent = '';
+function show(view) {
+  for (const id of ['public-view', 'auth-view', 'panel-view']) {
+    $(id).classList.toggle('hidden', id !== view);
+  }
+  window.scrollTo(0, 0);
+}
+
+/* ======================= Шапка с аккаунтом ======================= */
+
+function renderAccount() {
+  const area = $('account-area');
+
+  if (!state.account) {
+    area.innerHTML = '<button class="btn btn-sm" id="open-auth">Войти</button>';
+    $('open-auth').addEventListener('click', () => openAuth('login'));
+    return;
+  }
+
+  const isAdmin = state.account.role === 'admin';
+  area.innerHTML = `
+    <span class="user-name">${esc(state.account.login)}</span>
+    <span class="role ${isAdmin ? 'role-admin' : 'role-user'}">${isAdmin ? 'Админ' : 'Пользователь'}</span>
+    <button class="btn btn-sm" id="go-panel">Панель</button>
+    <button class="btn btn-sm" id="logout">Выйти</button>`;
+
+  $('go-panel').addEventListener('click', openPanel);
+  $('logout').addEventListener('click', logout);
+}
+
+/* ======================= Вход и регистрация ======================= */
+
+function openAuth(mode) {
+  state.mode = mode;
+  syncAuthMode();
+  $('auth-error').textContent = '';
+  show('auth-view');
+  $('login').focus();
+}
+
+/** Приводит форму в соответствие выбранной вкладке. */
+function syncAuthMode() {
+  const isRegister = state.mode === 'register';
+
+  for (const tab of document.querySelectorAll('.tab')) {
+    tab.classList.toggle('active', tab.dataset.mode === state.mode);
+  }
+
+  $('submit-auth').textContent = isRegister ? 'Создать аккаунт' : 'Войти';
+  $('auth-note').textContent = isRegister
+    ? 'Создайте аккаунт, чтобы видеть рыночные данные.'
+    : 'Войдите, чтобы видеть рыночные данные.';
+  $('auth-hint').classList.toggle('hidden', !isRegister);
+  $('password').setAttribute('autocomplete', isRegister ? 'new-password' : 'current-password');
+}
+
+async function submitAuth() {
+  const login = $('login').value.trim();
+  const password = $('password').value;
+  const button = $('submit-auth');
+
+  if (!login || !password) {
+    $('auth-error').textContent = 'Заполните оба поля';
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = 'Подождите…';
+  $('auth-error').textContent = '';
+
+  try {
+    const response = await fetch(API_AUTH, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: state.mode, login, password }),
+    });
+
+    const body = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      $('auth-error').textContent = body.error ?? 'Не удалось войти';
+      return;
+    }
+
+    state.token = body.token;
+    state.account = body.account;
+    writeToken(body.token);
+
+    $('password').value = '';
+    renderAccount();
+    openPanel();
+  } catch {
+    $('auth-error').textContent = 'Сеть недоступна';
+  } finally {
+    button.disabled = false;
+    syncAuthMode();
+  }
+}
+
+function logout() {
+  stopAutoRefresh();
+  state.token = null;
+  state.account = null;
+  writeToken(null);
+  renderAccount();
+  show('public-view');
+}
+
+/* ======================= Панель ======================= */
+
+function openPanel() {
+  show('panel-view');
+  load();
+  startAutoRefresh();
+}
+
+/**
+ * Автообновление.
+ *
+ * Когда вкладка скрыта, опрос останавливается: обновлять то, чего никто
+ * не видит, — впустую тратить запросы. При возвращении данные
+ * подтягиваются сразу, без ожидания следующего интервала.
+ */
+function startAutoRefresh() {
+  stopAutoRefresh();
+  state.timer = setInterval(load, REFRESH_MS);
+  state.tickTimer = setInterval(renderAge, 1000);
+}
+
+function stopAutoRefresh() {
+  clearInterval(state.timer);
+  clearInterval(state.tickTimer);
+  state.timer = null;
+  state.tickTimer = null;
+}
+
+document.addEventListener('visibilitychange', () => {
+  const onPanel = !$('panel-view').classList.contains('hidden');
+  if (!onPanel || !state.token) return;
+
+  if (document.hidden) stopAutoRefresh();
+  else {
+    load();
+    startAutoRefresh();
+  }
+});
+
+/** Надпись «обновлено N секунд назад», пересчитывается каждую секунду. */
+function renderAge() {
+  if (state.lastUpdate === null) return;
+
+  const seconds = Math.round((Date.now() - state.lastUpdate) / 1000);
+  $('updated-at').textContent =
+    seconds < 5 ? 'данные актуальны' : `обновлено ${seconds} ${plural(seconds)} назад`;
+}
+
+function plural(n) {
+  const last = n % 10;
+  const tens = n % 100;
+  if (tens >= 11 && tens <= 14) return 'секунд';
+  if (last === 1) return 'секунду';
+  if (last >= 2 && last <= 4) return 'секунды';
+  return 'секунд';
+}
+
+async function load() {
+  if (!state.token) return;
 
   let response;
   try {
-    // Пароль уходит телом запроса, а не заголовком: заголовки HTTP
-    // допускают только латиницу, и пароль с кириллицей отправить нельзя.
-    response = await fetch(API, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ password }),
-    });
+    response = await fetch(API_DATA, { headers: { authorization: `Bearer ${state.token}` } });
   } catch {
-    $('panel-error').textContent = 'Сеть недоступна. Проверьте соединение.';
+    $('panel-error').textContent = 'Сеть недоступна, следующая попытка через 20 секунд';
     return;
   }
 
   if (response.status === 401) {
-    writePassword(null);
-    $('dashboard').classList.add('hidden');
-    $('login-card').classList.remove('hidden');
-    $('login-error').textContent = 'Неверный пароль';
+    // Сессия истекла или секрет подписи сменился — просим войти заново.
+    stopAutoRefresh();
+    writeToken(null);
+    state.token = null;
+    state.account = null;
+    renderAccount();
+    openAuth('login');
+    $('auth-error').textContent = 'Сессия истекла, войдите заново';
     return;
   }
 
@@ -83,19 +240,15 @@ async function load(password) {
     return;
   }
 
-  writePassword(password);
-  $('login-card').classList.add('hidden');
-  $('dashboard').classList.remove('hidden');
+  $('panel-error').textContent = '';
   render(await response.json());
 }
 
-/* ---------- Вспомогательные ---------- */
+/* ======================= Вспомогательные ======================= */
 
-/** Число или прочерк, если значение не посчиталось. */
-const num = (value, digits = 2) =>
-  Number.isFinite(value) ? value.toFixed(digits) : '—';
+const num = (value, digits = 2) => (Number.isFinite(value) ? value.toFixed(digits) : '—');
 
-/** Экранирование: данные приходят от пользователей бота. */
+/** Экранирование: часть данных приходит от пользователей. */
 function esc(value) {
   return String(value)
     .replace(/&/g, '&amp;')
@@ -107,7 +260,6 @@ function esc(value) {
 const dt = (ms) =>
   ms ? new Date(ms).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) : '—';
 
-/** Карточка с крупным числом. */
 function statCard(label, value, sub = '', extra = '') {
   return `<div class="card stat">
     <span class="stat-label">${label}</span>
@@ -117,217 +269,217 @@ function statCard(label, value, sub = '', extra = '') {
   </div>`;
 }
 
-/** Точка состояния службы. */
-const dot = (state) =>
-  `<span class="dot dot-${state}"></span>`;
+const dot = (s) => `<span class="dot dot-${s}"></span>`;
 
-/* ---------- Отрисовка ---------- */
-
-function render(data) {
-  $('updated-at').textContent = `Обновлено ${dt(data.generatedAt)}`;
-
-  renderHealth(data);
-  renderMarket(data);
-  renderAlerts(data.alerts);
-  renderUsers(data);
-
-  if (data.errors.length > 0) {
-    const list = data.errors.map((e) => `${esc(e.section)}: ${esc(e.error)}`).join('; ');
-    $('panel-error').textContent = `Недоступны разделы — ${list}`;
-  }
+/** Подставляет разметку и мягко подсвечивает обновление. */
+function put(id, html) {
+  const node = $(id);
+  node.innerHTML = html;
+  node.classList.remove('fade-in');
+  void node.offsetWidth; // перезапуск анимации
+  node.classList.add('fade-in');
 }
 
-function renderHealth(data) {
-  const cards = [];
+/* ======================= Отрисовка ======================= */
 
-  // Расход кредитов Twelve Data с полосой заполнения.
-  if (data.usage) {
-    const { dailyUsed, dailyLimit, minuteUsed, minuteLimit, plan } = data.usage;
-    const percent = dailyLimit ? Math.round((dailyUsed / dailyLimit) * 100) : 0;
-    const level = percent > 85 ? 'high' : percent > 60 ? 'mid' : '';
-    cards.push(
-      statCard(
-        'Кредиты Twelve Data',
-        `${dailyUsed} / ${dailyLimit}`,
-        `${percent}% дневного лимита · тариф ${esc(plan ?? '—')} · ${minuteUsed}/${minuteLimit} в минуту`,
-        `<div class="bar"><div class="bar-fill ${level}" style="width:${Math.min(percent, 100)}%"></div></div>`,
-      ),
-    );
-  } else {
-    cards.push(statCard('Кредиты Twelve Data', '—', 'данные недоступны'));
+function render(data) {
+  state.lastUpdate = Date.now();
+  renderAge();
+
+  // Роль могла измениться — обновляем шапку по данным сервера.
+  if (state.account && data.role && state.account.role !== data.role) {
+    state.account.role = data.role;
+    renderAccount();
   }
 
-  // Вебхук Telegram.
-  if (data.webhook) {
-    const bad = Boolean(data.webhook.lastError);
-    cards.push(
-      statCard(
-        'Вебхук Telegram',
-        `${dot(bad ? 'bad' : 'ok')}${bad ? 'ошибка' : 'работает'}`,
-        bad
-          ? `${esc(data.webhook.lastError)} · ${dt(data.webhook.lastErrorAt)}`
-          : `в очереди ${data.webhook.pending} апдейтов`,
-      ),
-    );
-  } else {
-    cards.push(statCard('Вебхук Telegram', `${dot('bad')}недоступен`));
+  renderMarket(data);
+
+  const isAdmin = data.role === 'admin';
+  $('admin-only').classList.toggle('hidden', !isAdmin);
+
+  if (isAdmin) {
+    renderHealth(data);
+    renderAlerts(data.alerts ?? []);
+    renderBotUsers(data);
+    renderAccounts(data.accounts ?? []);
   }
 
-  // Хранилище.
-  cards.push(
-    statCard(
-      'Хранилище Blobs',
-      `${dot(data.storage.ok ? 'ok' : 'bad')}${data.storage.ok ? 'доступно' : 'ошибка'}`,
-      data.storage.ok ? 'чтение и запись' : esc(data.storage.error ?? ''),
-    ),
-  );
-
-  // Макроданные.
-  if (data.macro) {
-    cards.push(
-      statCard(
-        'Реальная доходность',
-        `${num(data.macro.value)}%`,
-        `${esc(data.macro.seriesId)} · на ${esc(data.macro.date)}` +
-          (data.macro.change === null
-            ? ''
-            : ` · ${data.macro.change > 0 ? '+' : ''}${data.macro.change} п.п.`),
-      ),
-    );
-  } else {
-    cards.push(statCard('Реальная доходность', '—', 'FRED недоступен'));
+  if (data.errors?.length) {
+    $('panel-error').textContent =
+      'Недоступны разделы — ' + data.errors.map((e) => `${esc(e.section)}: ${esc(e.error)}`).join('; ');
   }
-
-  $('health').innerHTML = cards.join('');
 }
 
 function renderMarket(data) {
   const market = data.market;
+
   if (!market) {
-    $('market').innerHTML = statCard('Рынок', '—', 'данные недоступны');
-    $('pivots-table').innerHTML = '';
+    put('market', statCard('Рынок', '—', 'данные недоступны'));
+    put('pivots-table', '');
     return;
   }
 
   const trendText = { up: 'восходящий', down: 'нисходящий', flat: 'боковик', unknown: 'не определён' };
   const trendClass = market.trend === 'up' ? 'up' : market.trend === 'down' ? 'down' : '';
-  const sessionNames = { asia: 'Азия', london: 'Лондон', newyork: 'Нью-Йорк' };
-  const sessions =
-    market.sessions.length > 0
-      ? market.sessions.map((s) => sessionNames[s] ?? s).join(' + ')
-      : 'затишье';
+  const names = { asia: 'Азия', london: 'Лондон', newyork: 'Нью-Йорк' };
+  const sessions = market.sessions.length ? market.sessions.map((s) => names[s] ?? s).join(' + ') : 'затишье';
 
-  $('market').innerHTML = [
-    statCard(
-      esc(market.symbol),
-      num(market.price),
-      `свеча от ${dt(market.candleTime)}${market.marketOpen ? '' : ' · рынок закрыт'}`,
-    ),
-    statCard(
-      'Тренд',
-      `<span class="${trendClass}">${trendText[market.trend]}</span>`,
-      `EMA 50 / 200: ${num(market.indicators.ema50)} / ${num(market.indicators.ema200)}`,
-    ),
+  put('market', [
+    statCard(esc(market.symbol), num(market.price), `свеча от ${dt(market.candleTime)}${market.marketOpen ? '' : ' · рынок закрыт'}`),
+    statCard('Тренд', `<span class="${trendClass}">${trendText[market.trend]}</span>`,
+      `EMA 50 / 200: ${num(market.indicators.ema50)} / ${num(market.indicators.ema200)}`),
     statCard('RSI(14)', num(market.indicators.rsi14, 1), `ATR(14): ${num(market.indicators.atr14)}`),
     statCard('Сессия', sessions, market.marketOpen ? 'торги идут' : 'торги закрыты'),
-  ].join('');
+  ].join(''));
 
-  // Пивот-уровни: сверху сопротивления, снизу поддержки.
-  if (market.pivots) {
-    const order = ['r3', 'r2', 'r1', 'pp', 's1', 's2', 's3'];
-    const rows = order
-      .map((key) => {
-        const value = market.pivots[key];
-        const above = value > market.price;
-        const diff = value - market.price;
-        return `<tr>
-          <td class="mono">${key.toUpperCase()}</td>
-          <td class="mono">${num(value)}</td>
-          <td class="mono ${above ? 'up' : 'down'}">${diff > 0 ? '+' : ''}${num(diff)}</td>
-          <td class="muted">${above ? 'сопротивление' : 'поддержка'}</td>
-        </tr>`;
-      })
-      .join('');
-    $('pivots-table').innerHTML =
-      `<thead><tr><th>Уровень</th><th>Цена</th><th>От текущей</th><th></th></tr></thead><tbody>${rows}</tbody>`;
+  if (!market.pivots) return;
+
+  const rows = ['r3', 'r2', 'r1', 'pp', 's1', 's2', 's3']
+    .map((key) => {
+      const value = market.pivots[key];
+      const above = value > market.price;
+      const diff = value - market.price;
+      return `<tr>
+        <td class="mono">${key.toUpperCase()}</td>
+        <td class="mono">${num(value)}</td>
+        <td class="mono ${above ? 'up' : 'down'}">${diff > 0 ? '+' : ''}${num(diff)}</td>
+        <td class="muted">${above ? 'сопротивление' : 'поддержка'}</td>
+      </tr>`;
+    })
+    .join('');
+
+  put('pivots-table', `<thead><tr><th>Уровень</th><th>Цена</th><th>От текущей</th><th></th></tr></thead><tbody>${rows}</tbody>`);
+}
+
+function renderHealth(data) {
+  const cards = [];
+
+  if (data.usage) {
+    const { dailyUsed, dailyLimit, minuteUsed, minuteLimit, plan } = data.usage;
+    const percent = dailyLimit ? Math.round((dailyUsed / dailyLimit) * 100) : 0;
+    const level = percent > 85 ? 'high' : percent > 60 ? 'mid' : '';
+    cards.push(statCard('Кредиты Twelve Data', `${dailyUsed} / ${dailyLimit}`,
+      `${percent}% дневного лимита · тариф ${esc(plan ?? '—')} · ${minuteUsed}/${minuteLimit} в минуту`,
+      `<div class="bar"><div class="bar-fill ${level}" style="width:${Math.min(percent, 100)}%"></div></div>`));
+  } else {
+    cards.push(statCard('Кредиты Twelve Data', '—', 'данные недоступны'));
   }
+
+  if (data.webhook) {
+    const bad = Boolean(data.webhook.lastError);
+    cards.push(statCard('Вебхук Telegram', `${dot(bad ? 'bad' : 'ok')}${bad ? 'ошибка' : 'работает'}`,
+      bad ? `${esc(data.webhook.lastError)} · ${dt(data.webhook.lastErrorAt)}` : `в очереди ${data.webhook.pending} апдейтов`));
+  } else {
+    cards.push(statCard('Вебхук Telegram', `${dot('bad')}недоступен`));
+  }
+
+  cards.push(statCard('Хранилище', `${dot(data.storage?.ok ? 'ok' : 'bad')}${data.storage?.ok ? 'доступно' : 'ошибка'}`,
+    data.storage?.ok ? 'чтение и запись' : esc(data.storage?.error ?? '')));
+
+  if (data.macro) {
+    cards.push(statCard('Реальная доходность', `${num(data.macro.value)}%`,
+      `${esc(data.macro.seriesId)} · на ${esc(data.macro.date)}` +
+      (data.macro.change === null ? '' : ` · ${data.macro.change > 0 ? '+' : ''}${data.macro.change} п.п.`)));
+  }
+
+  put('health', cards.join(''));
 }
 
 function renderAlerts(alerts) {
-  if (alerts.length === 0) {
-    $('alerts-table').innerHTML =
-      '<tbody><tr><td class="muted">Активных уведомлений нет</td></tr></tbody>';
+  if (!alerts.length) {
+    put('alerts-table', '<tbody><tr><td class="muted">Активных уведомлений нет</td></tr></tbody>');
     return;
   }
 
-  const rows = alerts
-    .map(
-      (alert) => `<tr>
-      <td class="mono">${esc(alert.chatId)}</td>
-      <td>${alert.direction === 'above' ? '🔼 вверх' : '🔽 вниз'}</td>
-      <td class="mono">${num(alert.price)}</td>
-      <td class="mono ${alert.distance > 0 ? 'up' : 'down'}">
-        ${alert.distance === null ? '—' : `${alert.distance > 0 ? '+' : ''}${num(alert.distance)}`}
-      </td>
-      <td class="mono muted">${alert.distancePercent === null ? '—' : `${num(alert.distancePercent)}%`}</td>
-      <td class="muted">${dt(Date.parse(alert.createdAt))}</td>
-    </tr>`,
-    )
-    .join('');
+  const rows = alerts.map((a) => `<tr>
+    <td class="mono">${esc(a.chatId)}</td>
+    <td>${a.direction === 'above' ? '🔼 вверх' : '🔽 вниз'}</td>
+    <td class="mono">${num(a.price)}</td>
+    <td class="mono ${a.distance > 0 ? 'up' : 'down'}">${a.distance === null ? '—' : `${a.distance > 0 ? '+' : ''}${num(a.distance)}`}</td>
+    <td class="mono muted">${a.distancePercent === null ? '—' : `${num(a.distancePercent)}%`}</td>
+    <td class="muted">${dt(Date.parse(a.createdAt))}</td>
+  </tr>`).join('');
 
-  $('alerts-table').innerHTML =
-    `<thead><tr><th>Чат</th><th>Направление</th><th>Уровень</th><th>До цели</th><th>%</th><th>Создан</th></tr></thead><tbody>${rows}</tbody>`;
+  put('alerts-table', `<thead><tr><th>Чат</th><th>Направление</th><th>Уровень</th><th>До цели</th><th>%</th><th>Создан</th></tr></thead><tbody>${rows}</tbody>`);
 }
 
-function renderUsers(data) {
-  const subscribed = new Set(data.subscribers.map((s) => s.chatId));
+function renderBotUsers(data) {
+  const users = data.users ?? [];
+  const subscribed = new Set((data.subscribers ?? []).map((s) => s.chatId));
 
-  if (data.users.length === 0) {
-    $('users-table').innerHTML = '<tbody><tr><td class="muted">Пользователей пока нет</td></tr></tbody>';
+  if (!users.length) {
+    put('users-table', '<tbody><tr><td class="muted">Пользователей пока нет</td></tr></tbody>');
     return;
   }
 
-  const rows = data.users
-    .map(
-      (user) => `<tr>
-      <td class="mono">${esc(user.chatId)}</td>
-      <td>${esc(user.lang === 'en' ? '🇬🇧 English' : '🇷🇺 Русский')}</td>
-      <td>${subscribed.has(user.chatId) ? '✅ подписан' : '—'}</td>
-      <td class="muted">${dt(Date.parse(user.updatedAt))}</td>
-    </tr>`,
-    )
-    .join('');
+  const rows = users.map((u) => `<tr>
+    <td class="mono">${esc(u.chatId)}</td>
+    <td>${u.lang === 'en' ? '🇬🇧 English' : '🇷🇺 Русский'}</td>
+    <td>${subscribed.has(u.chatId) ? '✅ подписан' : '—'}</td>
+    <td class="muted">${dt(Date.parse(u.updatedAt))}</td>
+  </tr>`).join('');
 
-  $('users-table').innerHTML =
-    `<thead><tr><th>Чат</th><th>Язык</th><th>Сводка</th><th>Последняя активность</th></tr></thead><tbody>${rows}</tbody>` +
-    `<tfoot><tr><td colspan="4" class="muted">Всего ${data.users.length}, подписано ${data.subscribers.length}</td></tr></tfoot>`;
+  put('users-table',
+    `<thead><tr><th>Чат</th><th>Язык</th><th>Сводка</th><th>Активность</th></tr></thead><tbody>${rows}</tbody>` +
+    `<tfoot><tr><td colspan="4" class="muted">Всего ${users.length}, подписано ${subscribed.size}</td></tr></tfoot>`);
 }
 
-/* ---------- События ---------- */
+function renderAccounts(accounts) {
+  if (!accounts.length) {
+    put('accounts-table', '<tbody><tr><td class="muted">Зарегистрированных аккаунтов нет</td></tr></tbody>');
+    return;
+  }
 
-$('open-panel').addEventListener('click', showPanel);
-$('logout').addEventListener('click', () => {
-  writePassword(null);
-  $('dashboard').classList.add('hidden');
-  $('login-card').classList.remove('hidden');
-  $('password').value = '';
-  showPublic();
-});
+  const rows = accounts.map((a) => `<tr>
+    <td>${esc(a.login)}</td>
+    <td><span class="role role-${a.role === 'admin' ? 'admin' : 'user'}">${a.role === 'admin' ? 'Админ' : 'Пользователь'}</span></td>
+    <td class="muted">${dt(Date.parse(a.createdAt))}</td>
+    <td class="muted">${dt(Date.parse(a.lastLoginAt))}</td>
+  </tr>`).join('');
 
-$('login').addEventListener('click', () => {
-  const value = $('password').value.trim();
-  if (value) load(value);
-});
+  put('accounts-table',
+    `<thead><tr><th>Логин</th><th>Роль</th><th>Регистрация</th><th>Последний вход</th></tr></thead><tbody>${rows}</tbody>`);
+}
 
-// Enter в поле пароля срабатывает как нажатие кнопки.
-$('password').addEventListener('keydown', (event) => {
-  if (event.key === 'Enter') $('login').click();
-});
+/* ======================= События ======================= */
 
-$('refresh').addEventListener('click', () => {
-  const saved = readPassword();
-  if (saved) load(saved);
-});
+for (const tab of document.querySelectorAll('.tab')) {
+  tab.addEventListener('click', () => {
+    state.mode = tab.dataset.mode;
+    syncAuthMode();
+    $('auth-error').textContent = '';
+  });
+}
 
-// Прямая ссылка на панель: /#panel
-if (location.hash === '#panel') showPanel();
+$('submit-auth').addEventListener('click', submitAuth);
+$('hero-register').addEventListener('click', () => openAuth('register'));
+
+for (const id of ['login', 'password']) {
+  $(id).addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') submitAuth();
+  });
+}
+
+/* ======================= Запуск ======================= */
+
+(function init() {
+  renderAccount();
+  syncAuthMode();
+
+  // Токен из прошлой сессии: пробуем сразу открыть панель.
+  // Если он протух, сервер ответит 401 и нас вернёт на форму входа.
+  const saved = readToken();
+  if (saved) {
+    state.token = saved;
+    fetch(API_DATA, { headers: { authorization: `Bearer ${saved}` } })
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((data) => {
+        state.account = { login: data.login, role: data.role };
+        renderAccount();
+      })
+      .catch(() => {
+        writeToken(null);
+        state.token = null;
+      });
+  }
+})();

@@ -299,3 +299,120 @@ footer {
   section { padding: 38px 0; }
   .stat-value { font-size: 23px; }
 }
+
+/* ===========================================================================
+   Верхняя панель, аккаунт и роли
+   =========================================================================== */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: rgba(11, 14, 20, 0.85);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+}
+
+.topbar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 58px;
+}
+
+.brand {
+  font-weight: 600;
+  font-size: 17px;
+  color: var(--text);
+  text-decoration: none;
+  letter-spacing: -0.01em;
+}
+
+.account { display: flex; align-items: center; gap: 10px; }
+
+.btn-sm { padding: 7px 14px; font-size: 14px; }
+
+.user-name { font-size: 15px; }
+
+/* Значок роли. Админский намеренно красный и заметный. */
+.role {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.role-admin {
+  background: var(--danger);
+  color: #fff;
+  box-shadow: 0 0 0 1px rgba(248, 81, 73, 0.4), 0 0 14px rgba(248, 81, 73, 0.35);
+}
+
+.role-user {
+  background: var(--surface-2);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
+/* ---------- Форма входа ---------- */
+
+.auth-card { max-width: 420px; margin: 0 auto; }
+
+.tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 18px;
+  padding: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.tab {
+  flex: 1;
+  padding: 9px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.tab.active { background: var(--surface-2); color: var(--text); }
+
+.auth-hint { font-size: 13px; margin: 12px 0 0; }
+
+/* ---------- Индикатор живого обновления ---------- */
+
+.live { display: flex; align-items: center; gap: 8px; }
+
+.pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ok);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.5); }
+  50% { opacity: 0.6; box-shadow: 0 0 0 6px rgba(63, 185, 80, 0); }
+}
+
+/* Плавное появление обновлённых данных */
+.fade-in { animation: fade 0.3s ease; }
+
+@keyframes fade {
+  from { opacity: 0.45; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse, .fade-in { animation: none; }
+}
