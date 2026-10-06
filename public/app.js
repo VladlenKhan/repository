@@ -6,6 +6,8 @@
    перезагрузку страницы.
    =========================================================================== */
 
+import { initChart, setChartToken, stopChart } from './chart.js';
+
 const API_AUTH = '/api/auth';
 const API_DATA = '/api/data';
 const TOKEN_KEY = 'aurum-token';
@@ -133,6 +135,7 @@ async function submitAuth() {
     state.token = body.token;
     state.account = body.account;
     writeToken(body.token);
+    setChartToken(body.token);
 
     $('password').value = '';
     renderAccount();
@@ -147,6 +150,7 @@ async function submitAuth() {
 
 function logout() {
   stopAutoRefresh();
+  stopChart();
   state.token = null;
   state.account = null;
   writeToken(null);
@@ -160,6 +164,7 @@ function openPanel() {
   show('panel-view');
   load();
   startAutoRefresh();
+  initChart(state.token);
 }
 
 /**
@@ -186,10 +191,13 @@ document.addEventListener('visibilitychange', () => {
   const onPanel = !$('panel-view').classList.contains('hidden');
   if (!onPanel || !state.token) return;
 
-  if (document.hidden) stopAutoRefresh();
-  else {
+  if (document.hidden) {
+    stopAutoRefresh();
+    stopChart();
+  } else {
     load();
     startAutoRefresh();
+    initChart(state.token);
   }
 });
 
@@ -225,6 +233,7 @@ async function load() {
   if (response.status === 401) {
     // Сессия истекла или секрет подписи сменился — просим войти заново.
     stopAutoRefresh();
+    stopChart();
     writeToken(null);
     state.token = null;
     state.account = null;

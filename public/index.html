@@ -152,7 +152,29 @@
       </div>
 
       <!-- Видно всем, кто вошёл -->
-      <h3>Рынок</h3>
+      <div class="chart-head">
+        <h3 style="margin:0">График</h3>
+        <div class="tf-group">
+          <button class="tf" data-tf="15min">15м</button>
+          <button class="tf active" data-tf="1h">1ч</button>
+          <button class="tf" data-tf="4h">4ч</button>
+          <button class="tf" data-tf="1day">1д</button>
+        </div>
+      </div>
+      <div class="chart-box">
+        <div class="chart-overlay">
+          <span class="chart-title">XAU/USD</span>
+          <span id="chart-legend"></span>
+          <span class="chart-keys">
+            <i style="background:#60a5fa"></i>EMA 50
+            <i style="background:#e8b339"></i>EMA 200
+          </span>
+        </div>
+        <div id="chart"></div>
+      </div>
+      <p class="muted chart-status" id="chart-status">загрузка…</p>
+
+      <h3 class="subsection">Показатели</h3>
       <div class="grid" id="market"></div>
       <div class="table-wrap" style="margin-top:16px"><table id="pivots-table"></table></div>
 
@@ -190,6 +212,6 @@
   </div>
 </footer>
 
-<script src="/app.js"></script>
+<script type="module" src="/app.js"></script>
 </body>
 </html>

@@ -416,3 +416,87 @@ footer {
 @media (prefers-reduced-motion: reduce) {
   .pulse, .fade-in { animation: none; }
 }
+
+
+/* ===========================================================================
+   Свечной график
+   =========================================================================== */
+
+.chart-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.tf-group {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+
+.tf {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.tf:hover { color: var(--text); }
+.tf.active { background: var(--surface-2); color: var(--gold); font-weight: 600; }
+
+.chart-box {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+#chart { height: 440px; }
+
+/* Подписи поверх полотна графика */
+.chart-overlay {
+  position: absolute;
+  top: 12px;
+  left: 14px;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+  pointer-events: none;
+  font-size: 13px;
+}
+
+.chart-title { font-weight: 600; font-size: 15px; }
+
+.leg { margin-right: 10px; font-family: var(--mono); }
+.leg i { color: var(--muted); font-style: normal; margin-right: 4px; }
+
+.chart-keys { color: var(--muted); display: flex; align-items: center; gap: 6px; }
+
+.chart-keys i {
+  display: inline-block;
+  width: 14px;
+  height: 2px;
+  border-radius: 2px;
+  margin-right: 2px;
+}
+
+.chart-status { font-size: 13px; margin: 10px 0 0; }
+
+@media (max-width: 560px) {
+  #chart { height: 320px; }
+  .chart-keys { display: none; }
+}
