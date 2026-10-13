@@ -1,30 +1,39 @@
 /* ===========================================================================
-   Логика сайта: вход, роли и автообновление панели.
+   Логика сайта: вход через Telegram, роли, вкладки, автообновление.
 
-   Без фреймворков — HTML собирается строками, состояние лежит в одном
-   объекте. Токен сессии хранится в localStorage, чтобы вход переживал
-   перезагрузку страницы.
+   Без фреймворков. Всё состояние — в одном объекте, разметка собирается
+   строками. Так видно, что происходит, без промежуточных абстракций.
    =========================================================================== */
 
 import { initChart, setChartToken, stopChart } from './chart.js';
+import { loadTrading, setTradingToken } from './trading.js';
+import { setBacktestToken } from './backtest.js';
+import { setAiToken } from './ai.js';
 
 const API_AUTH = '/api/auth';
 const API_DATA = '/api/data';
+const API_PEOPLE = '/api/people';
 const TOKEN_KEY = 'aurum-token';
-
-/** Как часто панель перезапрашивает данные. */
 const REFRESH_MS = 20000;
 
 const $ = (id) => document.getElementById(id);
 
-/** Единое состояние вместо разбросанных переменных. */
 const state = {
   token: null,
   account: null,
-  mode: 'login',
+  tab: 'overview',
+  people: [],
   timer: null,
-  lastUpdate: null,
   tickTimer: null,
+  lastUpdate: null,
+  canManageRoles: false,
+};
+
+const ROLE_LABEL = {
+  owner: 'Владелец',
+  admin: 'Админ',
+  user: 'Пользователь',
+  guest: 'Гость',
 };
 
 /* ======================= Хранение токена ======================= */
@@ -47,7 +56,55 @@ function writeToken(value) {
   }
 }
 
-/* ======================= Переключение экранов ======================= */
+/* ======================= Вход по ссылке ======================= */
+
+/**
+ * Код из ссылки, которую прислал бот.
+ *
+ * Лежит в хеш-фрагменте: он не уходит на сервер в заголовке Referer
+ * и не попадает в логи. Сразу после чтения стираем его из адресной
+ * строки, чтобы код не остался в истории браузера.
+ */
+function takeLoginCode() {
+  const match = location.hash.match(/^#login=(.+)$/);
+  if (!match) return null;
+
+  history.replaceState(null, '', location.pathname + location.search);
+  return decodeURIComponent(match[1]);
+}
+
+async function loginWithCode(code) {
+  try {
+    const response = await fetch(API_AUTH, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ loginCode: code }),
+    });
+
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      $('auth-error').textContent = body.error ?? 'Ссылка не подошла';
+      show('auth-view');
+      return;
+    }
+
+    state.token = body.token;
+    state.account = body.account;
+    writeToken(body.token);
+    setChartToken(body.token);
+    setTradingToken(body.token);
+    setBacktestToken(body.token);
+    setAiToken(body.token);
+
+    renderAccount();
+    openPanel();
+  } catch {
+    $('auth-error').textContent = 'Сеть недоступна';
+    show('auth-view');
+  }
+}
+
+/* ======================= Экраны ======================= */
 
 function show(view) {
   for (const id of ['public-view', 'auth-view', 'panel-view']) {
@@ -56,79 +113,48 @@ function show(view) {
   window.scrollTo(0, 0);
 }
 
-/* ======================= Шапка с аккаунтом ======================= */
+/* ======================= Шапка ======================= */
 
 function renderAccount() {
   const area = $('account-area');
 
   if (!state.account) {
-    area.innerHTML = '<button class="btn btn-sm" id="open-auth">Войти</button>';
-    $('open-auth').addEventListener('click', () => openAuth('login'));
+    area.innerHTML = '<button class="btn btn-sm" id="to-auth">Войти</button>';
+    $('to-auth').addEventListener('click', () => show('auth-view'));
     return;
   }
 
-  const isAdmin = state.account.role === 'admin';
+  const role = state.account.role;
   area.innerHTML = `
-    <span class="user-name">${esc(state.account.login)}</span>
-    <span class="role ${isAdmin ? 'role-admin' : 'role-user'}">${isAdmin ? 'Админ' : 'Пользователь'}</span>
-    <button class="btn btn-sm" id="go-panel">Панель</button>
+    <span class="user-name">${esc(state.account.displayName ?? state.account.login)}</span>
+    <span class="role role-${role}">${ROLE_LABEL[role] ?? role}</span>
+    <button class="btn btn-sm" id="to-panel">Панель</button>
     <button class="btn btn-sm" id="logout">Выйти</button>`;
 
-  $('go-panel').addEventListener('click', openPanel);
+  $('to-panel').addEventListener('click', openPanel);
   $('logout').addEventListener('click', logout);
 }
 
-/* ======================= Вход и регистрация ======================= */
+/* ======================= Вход и выход ======================= */
 
-function openAuth(mode) {
-  state.mode = mode;
-  syncAuthMode();
-  $('auth-error').textContent = '';
-  show('auth-view');
-  $('login').focus();
+/** Строка initData появляется, только когда страница открыта из бота. */
+function telegramInitData() {
+  const webApp = window.Telegram?.WebApp;
+  return webApp?.initData && webApp.initData.length > 0 ? webApp.initData : null;
 }
 
-/** Приводит форму в соответствие выбранной вкладке. */
-function syncAuthMode() {
-  const isRegister = state.mode === 'register';
-
-  for (const tab of document.querySelectorAll('.tab')) {
-    tab.classList.toggle('active', tab.dataset.mode === state.mode);
-  }
-
-  $('submit-auth').textContent = isRegister ? 'Создать аккаунт' : 'Войти';
-  $('auth-note').textContent = isRegister
-    ? 'Создайте аккаунт, чтобы видеть рыночные данные.'
-    : 'Войдите, чтобы видеть рыночные данные.';
-  $('auth-hint').classList.toggle('hidden', !isRegister);
-  $('password').setAttribute('autocomplete', isRegister ? 'new-password' : 'current-password');
-}
-
-async function submitAuth() {
-  const login = $('login').value.trim();
-  const password = $('password').value;
-  const button = $('submit-auth');
-
-  if (!login || !password) {
-    $('auth-error').textContent = 'Заполните оба поля';
-    return;
-  }
-
-  button.disabled = true;
-  button.textContent = 'Подождите…';
-  $('auth-error').textContent = '';
-
+async function loginWithTelegram(initData) {
   try {
     const response = await fetch(API_AUTH, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ action: state.mode, login, password }),
+      body: JSON.stringify({ initData }),
     });
 
     const body = await response.json().catch(() => ({}));
-
     if (!response.ok) {
-      $('auth-error').textContent = body.error ?? 'Не удалось войти';
+      $('auth-error').textContent = body.error ?? 'Telegram не подтвердил вход';
+      show('auth-view');
       return;
     }
 
@@ -136,26 +162,76 @@ async function submitAuth() {
     state.account = body.account;
     writeToken(body.token);
     setChartToken(body.token);
+    setTradingToken(body.token);
+    setBacktestToken(body.token);
+    setAiToken(body.token);
 
-    $('password').value = '';
     renderAccount();
     openPanel();
   } catch {
     $('auth-error').textContent = 'Сеть недоступна';
-  } finally {
-    button.disabled = false;
-    syncAuthMode();
+    show('auth-view');
   }
 }
 
+/**
+ * Полный выход.
+ *
+ * Важно гасить всё разом: таймеры опроса, таймер счётчика, график,
+ * сохранённый токен и содержимое панели. Если оставить хоть что-то,
+ * на экране продолжает жить кусок предыдущей сессии — например,
+ * пульсирующий индикатор «данные обновляются».
+ */
 function logout() {
   stopAutoRefresh();
   stopChart();
+
   state.token = null;
   state.account = null;
+  state.lastUpdate = null;
+  state.canManageRoles = false;
+  state.tab = 'overview';
   writeToken(null);
+
+  clearPanel();
   renderAccount();
   show('public-view');
+}
+
+/** Очищает панель, чтобы от прошлой сессии не осталось ничего видимого. */
+function clearPanel() {
+  for (const id of [
+    'market', 'pivots-table', 'macro', 'health',
+    'alerts-table', 'admins-table', 'users-table', 'people-summary',
+  ]) {
+    const node = $(id);
+    if (node) node.innerHTML = '';
+  }
+
+  $('updated-at').textContent = 'обновляется…';
+  $('panel-error').textContent = '';
+  $('auth-error').textContent = '';
+
+  for (const tab of document.querySelectorAll('.admin-tab')) tab.classList.add('hidden');
+  switchTab('overview');
+}
+
+/* ======================= Вкладки ======================= */
+
+function switchTab(name) {
+  state.tab = name;
+
+  for (const button of document.querySelectorAll('.tab-btn')) {
+    button.classList.toggle('active', button.dataset.tab === name);
+  }
+  for (const pane of document.querySelectorAll('.tab-pane')) {
+    pane.classList.toggle('hidden', pane.dataset.pane !== name);
+  }
+
+  // График создаём только когда его открыли: пока вкладка скрыта,
+  // у контейнера нулевая ширина и библиотека нарисовала бы пустоту.
+  if (name === 'chart' && state.token) initChart(state.token);
+  if (name === 'trading' && state.token) loadTrading();
 }
 
 /* ======================= Панель ======================= */
@@ -164,16 +240,8 @@ function openPanel() {
   show('panel-view');
   load();
   startAutoRefresh();
-  initChart(state.token);
 }
 
-/**
- * Автообновление.
- *
- * Когда вкладка скрыта, опрос останавливается: обновлять то, чего никто
- * не видит, — впустую тратить запросы. При возвращении данные
- * подтягиваются сразу, без ожидания следующего интервала.
- */
 function startAutoRefresh() {
   stopAutoRefresh();
   state.timer = setInterval(load, REFRESH_MS);
@@ -197,11 +265,10 @@ document.addEventListener('visibilitychange', () => {
   } else {
     load();
     startAutoRefresh();
-    initChart(state.token);
+    if (state.tab === 'chart') initChart(state.token);
   }
 });
 
-/** Надпись «обновлено N секунд назад», пересчитывается каждую секунду. */
 function renderAge() {
   if (state.lastUpdate === null) return;
 
@@ -231,15 +298,9 @@ async function load() {
   }
 
   if (response.status === 401) {
-    // Сессия истекла или секрет подписи сменился — просим войти заново.
-    stopAutoRefresh();
-    stopChart();
-    writeToken(null);
-    state.token = null;
-    state.account = null;
-    renderAccount();
-    openAuth('login');
+    logout();
     $('auth-error').textContent = 'Сессия истекла, войдите заново';
+    show('auth-view');
     return;
   }
 
@@ -257,7 +318,6 @@ async function load() {
 
 const num = (value, digits = 2) => (Number.isFinite(value) ? value.toFixed(digits) : '—');
 
-/** Экранирование: часть данных приходит от пользователей. */
 function esc(value) {
   return String(value)
     .replace(/&/g, '&amp;')
@@ -280,12 +340,12 @@ function statCard(label, value, sub = '', extra = '') {
 
 const dot = (s) => `<span class="dot dot-${s}"></span>`;
 
-/** Подставляет разметку и мягко подсвечивает обновление. */
 function put(id, html) {
   const node = $(id);
+  if (!node) return;
   node.innerHTML = html;
   node.classList.remove('fade-in');
-  void node.offsetWidth; // перезапуск анимации
+  void node.offsetWidth;
   node.classList.add('fade-in');
 }
 
@@ -295,23 +355,32 @@ function render(data) {
   state.lastUpdate = Date.now();
   renderAge();
 
-  // Роль могла измениться — обновляем шапку по данным сервера.
   if (state.account && data.role && state.account.role !== data.role) {
     state.account.role = data.role;
     renderAccount();
   }
 
+  state.canManageRoles = data.canManageRoles === true;
+
   renderMarket(data);
+  renderMacro(data);
 
-  const isAdmin = data.role === 'admin';
-  $('admin-only').classList.toggle('hidden', !isAdmin);
+  // Вкладки с персональными данными — от администратора и выше.
+  const privileged = data.role === 'admin' || data.role === 'owner';
+  for (const tab of document.querySelectorAll('.admin-tab')) {
+    tab.classList.toggle('hidden', !privileged);
+  }
 
-  if (isAdmin) {
+  if (privileged) {
     renderHealth(data);
     renderAlerts(data.alerts ?? []);
-    renderBotUsers(data);
-    renderAccounts(data.accounts ?? []);
+    renderPeople(data);
+  } else if (state.tab === 'people' || state.tab === 'system') {
+    // Роль могли понизить, пока вкладка была открыта.
+    switchTab('overview');
   }
+
+  if (state.tab === 'trading') loadTrading();
 
   if (data.errors?.length) {
     $('panel-error').textContent =
@@ -321,7 +390,6 @@ function render(data) {
 
 function renderMarket(data) {
   const market = data.market;
-
   if (!market) {
     put('market', statCard('Рынок', '—', 'данные недоступны'));
     put('pivots-table', '');
@@ -334,7 +402,8 @@ function renderMarket(data) {
   const sessions = market.sessions.length ? market.sessions.map((s) => names[s] ?? s).join(' + ') : 'затишье';
 
   put('market', [
-    statCard(esc(market.symbol), num(market.price), `свеча от ${dt(market.candleTime)}${market.marketOpen ? '' : ' · рынок закрыт'}`),
+    statCard(esc(market.symbol), num(market.price),
+      `свеча от ${dt(market.candleTime)}${market.marketOpen ? '' : ' · рынок закрыт'}`),
     statCard('Тренд', `<span class="${trendClass}">${trendText[market.trend]}</span>`,
       `EMA 50 / 200: ${num(market.indicators.ema50)} / ${num(market.indicators.ema200)}`),
     statCard('RSI(14)', num(market.indicators.rsi14, 1), `ATR(14): ${num(market.indicators.atr14)}`),
@@ -343,21 +412,42 @@ function renderMarket(data) {
 
   if (!market.pivots) return;
 
-  const rows = ['r3', 'r2', 'r1', 'pp', 's1', 's2', 's3']
-    .map((key) => {
-      const value = market.pivots[key];
-      const above = value > market.price;
-      const diff = value - market.price;
-      return `<tr>
-        <td class="mono">${key.toUpperCase()}</td>
-        <td class="mono">${num(value)}</td>
-        <td class="mono ${above ? 'up' : 'down'}">${diff > 0 ? '+' : ''}${num(diff)}</td>
-        <td class="muted">${above ? 'сопротивление' : 'поддержка'}</td>
-      </tr>`;
-    })
-    .join('');
+  const rows = ['r3', 'r2', 'r1', 'pp', 's1', 's2', 's3'].map((key) => {
+    const value = market.pivots[key];
+    const above = value > market.price;
+    const diff = value - market.price;
+    return `<tr>
+      <td class="mono">${key.toUpperCase()}</td>
+      <td class="mono">${num(value)}</td>
+      <td class="mono ${above ? 'up' : 'down'}">${diff > 0 ? '+' : ''}${num(diff)}</td>
+      <td class="muted">${above ? 'сопротивление' : 'поддержка'}</td>
+    </tr>`;
+  }).join('');
 
-  put('pivots-table', `<thead><tr><th>Уровень</th><th>Цена</th><th>От текущей</th><th></th></tr></thead><tbody>${rows}</tbody>`);
+  put('pivots-table',
+    `<thead><tr><th>Уровень</th><th>Цена</th><th>От текущей</th><th></th></tr></thead><tbody>${rows}</tbody>`);
+}
+
+function renderMacro(data) {
+  if (!data.macro) {
+    put('macro', statCard('Реальная доходность', '—', 'FRED недоступен'));
+    return;
+  }
+
+  const state_ = {
+    negative: 'отрицательная — золоту благоприятно',
+    rising: 'растёт — давит на золото',
+    falling: 'снижается — поддерживает золото',
+    stable: 'без заметных движений',
+  };
+
+  put('macro', [
+    statCard('Реальная доходность', `${num(data.macro.value)}%`,
+      `${esc(data.macro.seriesId)} · на ${esc(data.macro.date)}`),
+    statCard('Изменение',
+      data.macro.change === null ? '—' : `${data.macro.change > 0 ? '+' : ''}${data.macro.change}`,
+      state_[data.macro.state] ?? ''),
+  ].join(''));
 }
 
 function renderHealth(data) {
@@ -370,26 +460,17 @@ function renderHealth(data) {
     cards.push(statCard('Кредиты Twelve Data', `${dailyUsed} / ${dailyLimit}`,
       `${percent}% дневного лимита · тариф ${esc(plan ?? '—')} · ${minuteUsed}/${minuteLimit} в минуту`,
       `<div class="bar"><div class="bar-fill ${level}" style="width:${Math.min(percent, 100)}%"></div></div>`));
-  } else {
-    cards.push(statCard('Кредиты Twelve Data', '—', 'данные недоступны'));
   }
 
   if (data.webhook) {
     const bad = Boolean(data.webhook.lastError);
     cards.push(statCard('Вебхук Telegram', `${dot(bad ? 'bad' : 'ok')}${bad ? 'ошибка' : 'работает'}`,
-      bad ? `${esc(data.webhook.lastError)} · ${dt(data.webhook.lastErrorAt)}` : `в очереди ${data.webhook.pending} апдейтов`));
-  } else {
-    cards.push(statCard('Вебхук Telegram', `${dot('bad')}недоступен`));
+      bad ? `${esc(data.webhook.lastError)} · ${dt(data.webhook.lastErrorAt)}`
+          : `в очереди ${data.webhook.pending} апдейтов`));
   }
 
   cards.push(statCard('Хранилище', `${dot(data.storage?.ok ? 'ok' : 'bad')}${data.storage?.ok ? 'доступно' : 'ошибка'}`,
     data.storage?.ok ? 'чтение и запись' : esc(data.storage?.error ?? '')));
-
-  if (data.macro) {
-    cards.push(statCard('Реальная доходность', `${num(data.macro.value)}%`,
-      `${esc(data.macro.seriesId)} · на ${esc(data.macro.date)}` +
-      (data.macro.change === null ? '' : ` · ${data.macro.change > 0 ? '+' : ''}${data.macro.change} п.п.`)));
-  }
 
   put('health', cards.join(''));
 }
@@ -409,141 +490,245 @@ function renderAlerts(alerts) {
     <td class="muted">${dt(Date.parse(a.createdAt))}</td>
   </tr>`).join('');
 
-  put('alerts-table', `<thead><tr><th>Чат</th><th>Направление</th><th>Уровень</th><th>До цели</th><th>%</th><th>Создан</th></tr></thead><tbody>${rows}</tbody>`);
+  put('alerts-table',
+    `<thead><tr><th>Чат</th><th>Направление</th><th>Уровень</th><th>До цели</th><th>%</th><th>Создан</th></tr></thead><tbody>${rows}</tbody>`);
 }
 
-function renderBotUsers(data) {
-  const users = data.users ?? [];
-  const subscribed = new Set((data.subscribers ?? []).map((s) => s.chatId));
+/**
+ * Люди, разделённые по правам.
+ *
+ * Владелец и администраторы — в одной таблице, остальные в другой:
+ * у них разные задачи. Управляющие аккаунты нужно видеть все сразу,
+ * а обычных пользователей — искать по идентификатору.
+ */
+function renderPeople(data) {
+  state.people = data.people ?? [];
+  drawPeople();
+}
 
-  if (!users.length) {
-    put('users-table', '<tbody><tr><td class="muted">Пользователей пока нет</td></tr></tbody>');
+/** Перерисовывает обе таблицы с учётом строки поиска. */
+function drawPeople() {
+  const all = state.people ?? [];
+  const query = ($('people-search')?.value ?? '').trim().toLowerCase();
+
+  const matches = (p) =>
+    !query ||
+    String(p.telegramId).includes(query) ||
+    (p.username ?? '').toLowerCase().includes(query) ||
+    (p.name ?? '').toLowerCase().includes(query);
+
+  const visible = all.filter(matches);
+  const privileged = visible.filter((p) => p.role === 'owner' || p.role === 'admin');
+  const regular = visible.filter((p) => p.role !== 'owner' && p.role !== 'admin');
+
+  put('people-summary', [
+    statCard('Всего людей', all.length,
+      `${all.filter((p) => p.usesSite).length} заходили на сайт`),
+    statCard('Управляющие', all.filter((p) => p.role === 'owner' || p.role === 'admin').length,
+      'владелец и администраторы'),
+    statCard('Подписаны на сводку', all.filter((p) => p.subscribed).length,
+      `уведомлений: ${all.reduce((s, p) => s + p.alerts, 0)}`),
+  ].join(''));
+
+  renderPeopleTable('admins-table', privileged, 'Администраторов нет');
+  renderPeopleTable('users-table', regular,
+    query ? 'Никто не найден' : 'Пользователей пока нет');
+
+  bindPeopleActions();
+}
+
+function renderPeopleTable(id, people, emptyText) {
+  if (people.length === 0) {
+    put(id, `<tbody><tr><td class="muted">${emptyText}</td></tr></tbody>`);
     return;
   }
 
-  const rows = users.map((u) => `<tr>
-    <td class="mono">${esc(u.chatId)}</td>
-    <td>${u.lang === 'en' ? '🇬🇧 English' : '🇷🇺 Русский'}</td>
-    <td>${subscribed.has(u.chatId) ? '✅ подписан' : '—'}</td>
-    <td class="muted">${dt(Date.parse(u.updatedAt))}</td>
-  </tr>`).join('');
+  const rows = people.map((p) => {
+    const isOwner = p.role === 'owner';
 
-  put('users-table',
-    `<thead><tr><th>Чат</th><th>Язык</th><th>Сводка</th><th>Активность</th></tr></thead><tbody>${rows}</tbody>` +
-    `<tfoot><tr><td colspan="4" class="muted">Всего ${users.length}, подписано ${subscribed.size}</td></tr></tfoot>`);
+    const handle = p.username
+      ? `<a href="https://t.me/${esc(p.username)}" target="_blank" rel="noopener">@${esc(p.username)}</a>`
+      : '<span class="muted">без имени</span>';
+
+    const role = p.role
+      ? `<span class="role role-${p.role}">${ROLE_LABEL[p.role] ?? p.role}</span>`
+      : '<span class="muted">только бот</span>';
+
+    // Владельца нельзя ни понизить, ни удалить: его роль задана
+    // окружением, а запись всё равно пересоздастся при входе.
+    let actions = '<span class="muted">—</span>';
+    if (state.canManageRoles && !isOwner) {
+      const roleButton = p.usesSite
+        ? `<button class="role-action" data-login="${esc(p.login)}" data-role="${p.role === 'admin' ? 'user' : 'admin'}">
+             ${p.role === 'admin' ? 'Снять админа' : 'Сделать админом'}
+           </button>`
+        : '';
+      actions = `${roleButton}<button class="danger-action" data-remove="${esc(p.telegramId)}">Удалить</button>`;
+    }
+
+    return `<tr>
+      <td>${handle}</td>
+      <td class="mono">${esc(p.telegramId)}</td>
+      <td>${esc(p.name ?? '—')}</td>
+      <td>${role}</td>
+      <td>${p.lang === 'en' ? '🇬🇧' : p.lang === 'ru' ? '🇷🇺' : '—'}</td>
+      <td>${p.subscribed ? '✅' : '—'}</td>
+      <td class="mono">${p.alerts || '—'}</td>
+      <td class="muted">${dt(Date.parse(p.lastSeen))}</td>
+      <td>${actions}</td>
+    </tr>`;
+  }).join('');
+
+  put(id,
+    `<thead><tr>
+      <th>Пользователь</th><th>Telegram ID</th><th>Имя</th><th>Роль</th>
+      <th>Язык</th><th>Сводка</th><th>Алерты</th><th>Активность</th><th></th>
+    </tr></thead><tbody>${rows}</tbody>`);
 }
 
-function renderAccounts(accounts) {
-  if (!accounts.length) {
-    put('accounts-table', '<tbody><tr><td class="muted">Зарегистрированных аккаунтов нет</td></tr></tbody>');
+function bindPeopleActions() {
+  for (const button of document.querySelectorAll('.role-action')) {
+    button.addEventListener('click', () => changeRole(button));
+  }
+  for (const button of document.querySelectorAll('.danger-action')) {
+    button.addEventListener('click', () => removePerson(button));
+  }
+}
+
+/**
+ * Удаление человека.
+ *
+ * Операция необратимая и чистит сразу всё: аккаунт, настройки бота,
+ * подписку и уведомления. Поэтому спрашиваем подтверждение с явным
+ * указанием, кого именно удаляем.
+ */
+async function removePerson(button) {
+  const id = button.dataset.remove;
+  const person = (state.people ?? []).find((p) => String(p.telegramId) === id);
+  const who = person?.username ? `@${person.username}` : `ID ${id}`;
+
+  if (!confirm(`Удалить ${who}? Аккаунт, подписка и уведомления будут стёрты безвозвратно.`)) {
     return;
   }
 
-  const rows = accounts.map((a) => `<tr>
-    <td>${esc(a.login)}</td>
-    <td><span class="role role-${a.role === 'admin' ? 'admin' : 'user'}">${a.role === 'admin' ? 'Админ' : 'Пользователь'}</span></td>
-    <td class="muted">${dt(Date.parse(a.createdAt))}</td>
-    <td class="muted">${dt(Date.parse(a.lastLoginAt))}</td>
-  </tr>`).join('');
+  button.disabled = true;
+  button.textContent = 'Удаляю…';
 
-  put('accounts-table',
-    `<thead><tr><th>Логин</th><th>Роль</th><th>Регистрация</th><th>Последний вход</th></tr></thead><tbody>${rows}</tbody>`);
+  try {
+    const response = await fetch(API_PEOPLE, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${state.token}` },
+      body: JSON.stringify({ action: 'delete', telegramId: Number(id) }),
+    });
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      $('panel-error').textContent = body.error ?? 'Не удалось удалить';
+      button.disabled = false;
+      button.textContent = 'Удалить';
+      return;
+    }
+
+    await load();
+  } catch {
+    $('panel-error').textContent = 'Сеть недоступна';
+    button.disabled = false;
+    button.textContent = 'Удалить';
+  }
+}
+
+async function changeRole(button) {
+  button.disabled = true;
+  button.textContent = 'Меняю…';
+
+  try {
+    const response = await fetch(API_PEOPLE, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${state.token}` },
+      body: JSON.stringify({ login: button.dataset.login, role: button.dataset.role }),
+    });
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      $('panel-error').textContent = body.error ?? 'Не удалось сменить роль';
+      button.disabled = false;
+      return;
+    }
+
+    await load();
+  } catch {
+    $('panel-error').textContent = 'Сеть недоступна';
+    button.disabled = false;
+  }
 }
 
 /* ======================= События ======================= */
 
-for (const tab of document.querySelectorAll('.tab')) {
-  tab.addEventListener('click', () => {
-    state.mode = tab.dataset.mode;
-    syncAuthMode();
-    $('auth-error').textContent = '';
-  });
+for (const button of document.querySelectorAll('.tab-btn')) {
+  button.addEventListener('click', () => switchTab(button.dataset.tab));
 }
 
-$('submit-auth').addEventListener('click', submitAuth);
-$('hero-register').addEventListener('click', () => openAuth('register'));
+// Поиск фильтрует уже загруженные данные — без запроса к серверу.
+$('people-search').addEventListener('input', drawPeople);
 
-for (const id of ['login', 'password']) {
-  $(id).addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') submitAuth();
-  });
-}
-
-/* ======================= Вход через Telegram ======================= */
-
-/**
- * Страница, открытая кнопкой из бота, получает от Telegram строку
- * initData с подписанным профилем. Её наличие и означает, что мы
- * внутри мини-приложения.
- */
-function telegramInitData() {
-  const webApp = window.Telegram?.WebApp;
-  return webApp?.initData && webApp.initData.length > 0 ? webApp.initData : null;
-}
-
-/** Автоматический вход внутри Telegram — пароль не нужен. */
-async function loginWithTelegram(initData) {
-  try {
-    const response = await fetch(API_AUTH, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ action: 'telegram', initData }),
-    });
-
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      $('auth-error').textContent = body.error ?? 'Telegram не подтвердил вход';
-      show('auth-view');
-      return;
-    }
-
-    state.token = body.token;
-    state.account = body.account;
-    writeToken(body.token);
-    setChartToken(body.token);
-
-    renderAccount();
-    openPanel();
-  } catch {
-    $('auth-error').textContent = 'Сеть недоступна';
-    show('auth-view');
-  }
-}
+$('brand').addEventListener('click', (event) => {
+  event.preventDefault();
+  show(state.token ? 'panel-view' : 'public-view');
+});
 
 /* ======================= Запуск ======================= */
 
 (function init() {
   renderAccount();
-  syncAuthMode();
 
-  // Внутри Telegram: разворачиваем окно, прячем форму с паролем
-  // и входим по подписанному профилю.
+  // Переход по ссылке из бота: входим сразу, не спрашивая ничего.
+  const loginCode = takeLoginCode();
+  if (loginCode) {
+    show('auth-view');
+    $('auth-title').textContent = 'Входим…';
+    loginWithCode(loginCode);
+    return;
+  }
+
   const initData = telegramInitData();
   if (initData) {
     document.body.classList.add('in-telegram');
     window.Telegram.WebApp.ready();
     window.Telegram.WebApp.expand();
 
-    $('auth-note').textContent = 'Входим через Telegram…';
     show('auth-view');
+    $('auth-title').textContent = 'Входим…';
     loginWithTelegram(initData);
     return;
   }
 
-  // Токен из прошлой сессии: пробуем сразу открыть панель.
-  // Если он протух, сервер ответит 401 и нас вернёт на форму входа.
+  // Вне Telegram: пробуем сохранённую сессию, иначе показываем витрину.
   const saved = readToken();
-  if (saved) {
-    state.token = saved;
-    fetch(API_DATA, { headers: { authorization: `Bearer ${saved}` } })
-      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
-      .then((data) => {
-        state.account = { login: data.login, role: data.role };
-        renderAccount();
-      })
-      .catch(() => {
-        writeToken(null);
-        state.token = null;
-      });
-  }
+  if (!saved) return;
+
+  state.token = saved;
+  setChartToken(saved);
+  setTradingToken(saved);
+  setBacktestToken(saved);
+  setAiToken(saved);
+
+  fetch(API_DATA, { headers: { authorization: `Bearer ${saved}` } })
+    .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+    .then((data) => {
+      state.account = {
+        login: data.login,
+        role: data.role,
+        displayName: data.displayName ?? data.login,
+      };
+      renderAccount();
+
+      // Сессия жива — открываем панель сразу. Иначе в шапке написано,
+      // что вход выполнен, а на экране витрина: выглядит как сбой.
+      openPanel();
+    })
+    .catch(() => {
+      writeToken(null);
+      state.token = null;
+      renderAccount();
+    });
 })();

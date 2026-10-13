@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Aurum — аналитика золота</title>
-  <meta name="description" content="Аналитика по золоту XAU/USD: индикаторы, уровни, макрофон и уведомления о цене в Telegram." />
+  <meta name="description" content="Аналитика по золоту XAU/USD: индикаторы, уровни, макрофон и уведомления о цене." />
   <!-- SDK мини-приложений Telegram: отдаёт подписанный профиль
        пользователя, когда страница открыта кнопкой из бота -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -13,108 +13,58 @@
 </head>
 <body>
 
-<!-- Верхняя панель: слева название, справа аккаунт -->
 <nav class="topbar">
   <div class="wrap topbar-inner">
-    <a class="brand" href="#">🪙 Aurum</a>
-    <div class="account" id="account-area">
-      <button class="btn btn-sm" id="open-auth">Войти</button>
-    </div>
+    <a class="brand" href="#" id="brand">🪙 Aurum</a>
+    <div class="account" id="account-area"></div>
   </div>
 </nav>
 
-<header>
-  <div class="wrap">
-    <h1>Аналитика золота<br />в Telegram</h1>
-    <p class="lead">
-      Технические индикаторы по XAU/USD, уровни поддержки и сопротивления,
-      макроэкономический фон и уведомление, когда цена пересекает нужный уровень.
-    </p>
-    <div class="actions">
-      <a class="btn btn-primary" href="https://t.me/aurumtr_bot" target="_blank" rel="noopener">Открыть бота</a>
-      <button class="btn" id="hero-register">Создать аккаунт</button>
-    </div>
-  </div>
-</header>
-
 <!-- ===================== ВИТРИНА ===================== -->
 <main id="public-view">
+  <header>
+    <div class="wrap">
+      <h1>Аналитика золота<br />в Telegram</h1>
+      <p class="lead">
+        Технические индикаторы по XAU/USD, уровни поддержки и сопротивления,
+        макроэкономический фон и уведомления о достижении цены.
+      </p>
+      <div class="actions">
+        <a class="btn btn-primary" href="https://t.me/aurumtr_bot" target="_blank" rel="noopener">Открыть в Telegram</a>
+      </div>
+    </div>
+  </header>
 
   <section>
     <div class="wrap">
       <h2>Возможности</h2>
-      <p class="section-note">Шесть инструментов, каждый отвечает на свой вопрос о рынке.</p>
       <div class="grid">
-        <div class="card">
-          <div class="card-icon">📈</div>
-          <h3>Технический анализ</h3>
-          <p>EMA 50 и 200, RSI(14), ATR(14), определение тренда. Четыре таймфрейма — от 15 минут до дня.</p>
-        </div>
-        <div class="card">
-          <div class="card-icon">📐</div>
-          <h3>Уровни цены</h3>
-          <p>Пивот-уровни R3…S3 по дневной и четырёхчасовой свече. В разборе показываются ближайшие к цене.</p>
-        </div>
-        <div class="card">
-          <div class="card-icon">🏛</div>
-          <h3>Макрофон</h3>
-          <p>Реальная доходность 10-летних облигаций США и объяснение, как она связана с золотом.</p>
-        </div>
-        <div class="card">
-          <div class="card-icon">🔔</div>
-          <h3>Уведомления</h3>
-          <p>Сообщение, когда цена достигнет заданного уровня. Проверка каждые 15 минут.</p>
-        </div>
-        <div class="card">
-          <div class="card-icon">☀️</div>
-          <h3>Утренняя сводка</h3>
-          <p>Разбор рынка по будням в 06:00 UTC для подписчиков.</p>
-        </div>
-        <div class="card">
-          <div class="card-icon">🌍</div>
-          <h3>Два языка</h3>
-          <p>Русский и английский с переключением одной командой.</p>
-        </div>
+        <div class="card"><div class="card-icon">📈</div><h3>Технический анализ</h3>
+          <p>EMA 50 и 200, RSI(14), ATR(14), тренд. Четыре таймфрейма — от 15 минут до дня.</p></div>
+        <div class="card"><div class="card-icon">📐</div><h3>Уровни цены</h3>
+          <p>Пивот-уровни R3…S3 по дневной и четырёхчасовой свече.</p></div>
+        <div class="card"><div class="card-icon">🏛</div><h3>Макрофон</h3>
+          <p>Реальная доходность облигаций США и её связь с золотом.</p></div>
+        <div class="card"><div class="card-icon">🔔</div><h3>Уведомления</h3>
+          <p>Сообщение, когда цена достигнет заданного уровня.</p></div>
+        <div class="card"><div class="card-icon">📊</div><h3>Свечной график</h3>
+          <p>График с индикаторами и уровнями прямо в приложении.</p></div>
+        <div class="card"><div class="card-icon">☀️</div><h3>Утренняя сводка</h3>
+          <p>Разбор рынка по будням в 06:00 UTC для подписчиков.</p></div>
       </div>
     </div>
   </section>
 
   <section>
     <div class="wrap">
-      <h2>Команды</h2>
-      <p class="section-note">Таймфреймы понимают привычные сокращения: <code>H1</code>, <code>M15</code>, <code>4H</code>, <code>D1</code>.</p>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Команда</th><th>Что делает</th></tr></thead>
-          <tbody>
-            <tr><td><code>/start</code></td><td>приветствие и список команд</td></tr>
-            <tr><td><code>/analysis [тф]</code></td><td>разбор рынка: цена, тренд, индикаторы, уровни, сессия</td></tr>
-            <tr><td><code>/levels</code></td><td>полный набор уровней на D1 и H4</td></tr>
-            <tr><td><code>/macro</code></td><td>реальная доходность США и её влияние на золото</td></tr>
-            <tr><td><code>/subscribe</code></td><td>подписка на утреннюю сводку</td></tr>
-            <tr><td><code>/unsubscribe</code></td><td>отмена подписки</td></tr>
-            <tr><td><code>/alert 4200</code></td><td>уведомить при достижении уровня</td></tr>
-            <tr><td><code>/alerts</code></td><td>список активных уведомлений</td></tr>
-            <tr><td><code>/alerts_clear</code></td><td>удалить все уведомления</td></tr>
-            <tr><td><code>/lang</code></td><td>сменить язык</td></tr>
-            <tr><td><code>/help</code></td><td>список команд</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </section>
-
-  <section>
-    <div class="wrap">
-      <h2>С чего начать</h2>
+      <h2>Как войти</h2>
       <div class="grid">
-        <div class="card"><h3>1. Откройте бота</h3><p>Нажмите «Открыть бота» и отправьте <code>/start</code>.</p></div>
-        <div class="card"><h3>2. Посмотрите рынок</h3><p>Команда <code>/analysis</code> покажет текущую картину.</p></div>
-        <div class="card"><h3>3. Поставьте уведомление</h3><p><code>/alert 4200</code> — и бот напишет, когда цена дойдёт до уровня.</p></div>
+        <div class="card"><h3>1. Откройте бота</h3><p>Нажмите кнопку выше — откроется @aurumtr_bot.</p></div>
+        <div class="card"><h3>2. Нажмите «Запустить»</h3><p>Бот поздоровается и предложит открыть приложение.</p></div>
+        <div class="card"><h3>3. Готово</h3><p>Регистрация пройдёт сама по вашему аккаунту Telegram. Пароль не нужен.</p></div>
       </div>
     </div>
   </section>
-
 </main>
 
 <!-- ===================== ВХОД ===================== -->
@@ -122,24 +72,20 @@
   <section>
     <div class="wrap">
       <div class="card auth-card">
-        <div class="tabs">
-          <button class="tab active" data-mode="login">Вход</button>
-          <button class="tab" data-mode="register">Регистрация</button>
-        </div>
-
-        <p class="muted" id="auth-note">Войдите, чтобы видеть рыночные данные.</p>
-
-        <input class="field" id="login" type="text" placeholder="Логин" autocomplete="username" />
-        <input class="field" id="password" type="password" placeholder="Пароль" autocomplete="current-password" />
-
-        <button class="btn btn-primary" id="submit-auth" style="width:100%">Войти</button>
-
-        <div class="or"><span>или</span></div>
-        <a class="btn tg-btn" id="open-in-telegram" href="https://t.me/aurumtr_bot" target="_blank" rel="noopener">
-          Войти через Telegram
+        <div class="auth-icon">🔐</div>
+        <h3 id="auth-title">Вход через Telegram</h3>
+        <p class="muted" id="auth-note">
+          Панель открывается из бота: так вход проходит автоматически,
+          по вашему аккаунту Telegram.
+        </p>
+        <a class="btn btn-primary tg-btn" href="https://t.me/aurumtr_bot" target="_blank" rel="noopener">
+          Открыть бота
         </a>
+        <p class="muted auth-hint">
+          Если вы за компьютером — отправьте боту <code>/login</code>,
+          он пришлёт ссылку для входа в браузере.
+        </p>
         <p class="error" id="auth-error"></p>
-        <p class="muted auth-hint" id="auth-hint">Логин: латиница, цифры, дефис. Пароль: от восьми символов.</p>
       </div>
     </div>
   </section>
@@ -150,64 +96,242 @@
   <section>
     <div class="wrap">
 
-      <div class="panel-head">
-        <div>
-          <h2 style="margin:0">Панель</h2>
-          <p class="muted live" style="margin:4px 0 0">
-            <span class="pulse"></span><span id="updated-at">обновляется…</span>
+      <nav class="tabs-bar" id="tabs">
+        <button class="tab-btn active" data-tab="overview">Обзор</button>
+        <button class="tab-btn" data-tab="chart">График</button>
+        <button class="tab-btn" data-tab="trading">Сделки</button>
+        <button class="tab-btn" data-tab="backtest">Бэктест</button>
+        <button class="tab-btn admin-tab hidden" data-tab="people">Пользователи</button>
+        <button class="tab-btn admin-tab hidden" data-tab="system">Система</button>
+      </nav>
+
+      <p class="muted live"><span class="pulse"></span><span id="updated-at">обновляется…</span></p>
+
+      <!-- Обзор -->
+      <section class="tab-pane" data-pane="overview">
+        <div class="grid" id="market"></div>
+        <h3 class="subsection">Уровни</h3>
+        <div class="table-wrap"><table id="pivots-table"></table></div>
+        <h3 class="subsection">Макрофон</h3>
+        <div class="grid" id="macro"></div>
+
+        <div class="chart-head" style="margin-top:28px">
+          <h3 style="margin:0">Разбор от модели</h3>
+          <button class="btn btn-sm" id="ask-ai">Запросить</button>
+        </div>
+        <div class="card" id="ai-box">
+          <p class="muted" style="margin:0">
+            Языковая модель излагает словами то, что посчитали индикаторы и детектор
+            структуры. Прогнозов не делает — это не её работа.
           </p>
         </div>
-      </div>
+      </section>
 
-      <!-- Видно всем, кто вошёл -->
-      <div class="chart-head">
-        <h3 style="margin:0">График</h3>
-        <div class="tf-group">
-          <button class="tf" data-tf="15min">15м</button>
-          <button class="tf active" data-tf="1h">1ч</button>
-          <button class="tf" data-tf="4h">4ч</button>
-          <button class="tf" data-tf="1day">1д</button>
+      <!-- График -->
+      <section class="tab-pane hidden" data-pane="chart">
+        <div class="chart-head">
+          <button class="btn btn-sm" id="chart-expand">⤢ На весь экран</button>
+          <div class="tf-group">
+            <button class="tf" data-tf="15min">15м</button>
+            <button class="tf active" data-tf="1h">1ч</button>
+            <button class="tf" data-tf="4h">4ч</button>
+            <button class="tf" data-tf="1day">1д</button>
+          </div>
         </div>
-      </div>
-      <div class="chart-box">
-        <div class="chart-overlay">
-          <span class="chart-title">XAU/USD</span>
-          <span id="chart-legend"></span>
-          <span class="chart-keys">
-            <i style="background:#60a5fa"></i>EMA 50
-            <i style="background:#e8b339"></i>EMA 200
-          </span>
+        <div class="chart-box">
+          <div class="chart-overlay">
+            <span class="chart-title">XAU/USD</span>
+            <span id="chart-legend"></span>
+            <span class="chart-keys">
+              <i style="background:#60a5fa"></i>EMA 50
+              <i style="background:#e8b339"></i>EMA 200
+              <i style="background:rgba(38,166,154,.5)"></i>FVG
+              <i style="background:rgba(96,165,250,.6)"></i>OB
+              <i style="background:#a78bfa"></i>ликвидность
+            </span>
+          </div>
+          <div id="chart"></div>
         </div>
-        <div id="chart"></div>
-      </div>
-      <p class="muted chart-status" id="chart-status">загрузка…</p>
+        <div class="layer-bar">
+          <span class="muted">Разметка:</span>
+          <button class="layer active" data-layer="zones">Зоны FVG / OB</button>
+          <button class="layer active" data-layer="events">BOS / CHoCH</button>
+          <button class="layer active" data-layer="liquidity">Ликвидность</button>
+          <button class="layer active" data-layer="pivots">Пивоты</button>
+        </div>
+        <p class="muted chart-status" id="chart-status">загрузка…</p>
+        <p class="muted chart-status" id="structure-info"></p>
+      </section>
 
-      <h3 class="subsection">Показатели</h3>
-      <div class="grid" id="market"></div>
-      <div class="table-wrap" style="margin-top:16px"><table id="pivots-table"></table></div>
+      <!-- Сделки -->
+      <section class="tab-pane hidden" data-pane="trading">
+        <div class="grid" id="trade-stats"></div>
 
-      <!-- Только администратор -->
-      <div id="admin-only" class="hidden">
-        <div class="subsection">
-          <h3>Состояние системы</h3>
-          <div class="grid" id="health"></div>
+        <h3 class="subsection">Открытые позиции</h3>
+        <div class="table-wrap"><table id="open-table"></table></div>
+
+        <h3 class="subsection">История</h3>
+        <div class="table-wrap"><table id="history-table"></table></div>
+
+        <h3 class="subsection">По стратегиям</h3>
+        <div class="table-wrap"><table id="strategy-table"></table></div>
+
+        <div id="trade-settings" class="hidden">
+          <h3 class="subsection">Настройки торговли</h3>
+          <div class="card settings-card">
+            <label class="switch">
+              <input type="checkbox" id="set-enabled" />
+              <span>Торговля включена</span>
+            </label>
+            <label class="switch" style="margin-top:10px">
+              <input type="checkbox" id="set-llm" />
+              <span>Теневая оценка сигналов моделью (на открытие не влияет)</span>
+            </label>
+
+            <div class="settings-grid">
+              <label>Депозит, $<input class="field" id="set-deposit" type="number" min="1" step="100" /></label>
+              <label>Риск на сделку, %<input class="field" id="set-risk" type="number" min="0.1" max="100" step="0.1" /></label>
+              <label>Лот (если риск не задан)<input class="field" id="set-lot" type="number" min="0.01" step="0.01" /></label>
+              <label>Цель к стопу (R:R)<input class="field" id="set-reward" type="number" min="0.2" step="0.1" /></label>
+              <label>Максимум позиций<input class="field" id="set-max" type="number" min="1" max="50" step="1" /></label>
+              <label>Таймфрейм
+                <select class="field" id="set-timeframe">
+                  <option value="15min">15 минут</option>
+                  <option value="1h">1 час</option>
+                  <option value="4h">4 часа</option>
+                  <option value="1day">1 день</option>
+                </select>
+              </label>
+              <label>Стоп
+                <select class="field" id="set-stopmode">
+                  <option value="structure">по структуре (за границу зоны)</option>
+                  <option value="atr">по волатильности (ATR)</option>
+                </select>
+              </label>
+              <label>Множитель ATR<input class="field" id="set-atr" type="number" min="0.2" step="0.1" /></label>
+              <label>Частичная фиксация, R<input class="field" id="set-partial" type="number" min="0" step="0.5" /></label>
+              <label>Безубыток, R<input class="field" id="set-breakeven" type="number" min="0" step="0.5" /></label>
+              <label>Трейлинг, ATR<input class="field" id="set-trail" type="number" min="0" step="0.5" /></label>
+            </div>
+
+            <h4 class="settings-title">Стратегии</h4>
+            <div id="strategy-toggles" class="layer-bar"></div>
+
+            <div class="actions" style="margin-top:18px">
+              <button class="btn btn-primary" id="save-settings">Сохранить</button>
+              <button class="btn" id="reset-journal">Очистить журнал</button>
+            </div>
+            <p class="error" id="trade-error"></p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Бэктест -->
+      <section class="tab-pane hidden" data-pane="backtest">
+        <div class="card settings-card">
+          <p class="muted" style="margin-top:0">
+            Прогон стратегий по истории. Результат показывается дважды: по части,
+            на которой параметры подбирались, и по отложенной, которую движок не видел.
+            Расхождение между ними — мера подгонки.
+          </p>
+
+          <div class="settings-grid">
+            <label>Инструмент
+              <select class="field" id="bt-symbol">
+                <option value="">XAU/USD — золото</option>
+                <option value="XAG/USD">XAG/USD — серебро (сверка)</option>
+                <option value="EUR/USD">EUR/USD — евро (сверка)</option>
+                <option value="GBP/USD">GBP/USD — фунт (сверка)</option>
+              </select>
+            </label>
+            <label>Таймфрейм
+              <select class="field" id="bt-timeframe">
+                <option value="15min">15 минут</option>
+                <option value="1h" selected>1 час</option>
+                <option value="4h">4 часа</option>
+                <option value="1day">1 день</option>
+              </select>
+            </label>
+            <label>Депозит, $<input class="field" id="bt-deposit" type="number" value="10000" step="1000" /></label>
+            <label>Риск на сделку, %<input class="field" id="bt-risk" type="number" value="1" step="0.1" /></label>
+            <label>Цель к стопу (R:R)<input class="field" id="bt-reward" type="number" value="1.5" step="0.1" /></label>
+            <label>Спред, $<input class="field" id="bt-spread" type="number" value="0.3" step="0.1" /></label>
+            <label>Максимум позиций<input class="field" id="bt-max" type="number" value="3" step="1" /></label>
+            <label>Стоп не уже, ATR<input class="field" id="bt-minstop" type="number" value="0.8" step="0.1" /></label>
+            <label>Выход по времени, свечей<input class="field" id="bt-maxbars" type="number" value="0" step="1" /></label>
+            <label>Частичная фиксация, R<input class="field" id="bt-partial" type="number" value="1" step="0.5" min="0" /></label>
+            <label>Безубыток, R<input class="field" id="bt-breakeven" type="number" value="1" step="0.5" min="0" /></label>
+            <label>Трейлинг, ATR<input class="field" id="bt-trail" type="number" value="0" step="0.5" min="0" /></label>
+          </div>
+
+          <h4 class="settings-title">Стратегии</h4>
+          <div class="layer-bar" id="bt-strategies">
+            <button class="layer active" data-st="fvgRetest">Возврат в имбаланс</button>
+            <button class="layer active" data-st="obRetest">Возврат в order block</button>
+            <button class="layer active" data-st="sweepReversal">Разворот после снятия</button>
+          </div>
+
+          <h4 class="settings-title">Фильтры</h4>
+          <div class="layer-bar" id="bt-filters">
+            <button class="layer active" data-f="premiumDiscount">Premium / Discount</button>
+            <button class="layer" data-f="trendAlign">По направлению структуры</button>
+            <button class="layer" data-f="london">Только Лондон и Нью-Йорк</button>
+          </div>
+
+          <div class="actions" style="margin-top:18px">
+            <button class="btn btn-primary" id="run-backtest">Прогнать</button>
+          </div>
+          <p class="error" id="bt-error"></p>
         </div>
 
-        <div class="subsection">
-          <h3>Уведомления пользователей</h3>
-          <div class="table-wrap"><table id="alerts-table"></table></div>
-        </div>
+        <div id="bt-results" class="hidden">
+          <h3 class="subsection">Скользящая проверка</h3>
+          <p class="muted" style="margin-top:0">
+            Окно едет по истории: подбор на отрезке, проверка на следующем.
+            Несколько независимых проверок вместо одной — доля прибыльных окон
+            надёжнее общей суммы.
+          </p>
+          <div class="grid" id="bt-wf-summary"></div>
+          <div class="table-wrap" style="margin-top:14px"><table id="bt-windows"></table></div>
 
-        <div class="subsection">
-          <h3>Пользователи бота</h3>
-          <div class="table-wrap"><table id="users-table"></table></div>
-        </div>
+          <h3 class="subsection">Значимость</h3>
+          <div class="card" id="bt-significance"></div>
 
-        <div class="subsection">
-          <h3>Аккаунты сайта</h3>
-          <div class="table-wrap"><table id="accounts-table"></table></div>
+          <h3 class="subsection">Сравнение частей</h3>
+          <div class="table-wrap"><table id="bt-split"></table></div>
+          <p class="muted" id="bt-verdict"></p>
+
+          <h3 class="subsection">Вся история</h3>
+          <div class="grid" id="bt-stats"></div>
+
+          <h3 class="subsection">Кривая капитала</h3>
+          <div class="equity-box"><svg id="bt-equity" preserveAspectRatio="none"></svg></div>
+
+          <h3 class="subsection">По стратегиям</h3>
+          <div class="table-wrap"><table id="bt-strategy-table"></table></div>
         </div>
-      </div>
+      </section>
+
+      <!-- Пользователи -->
+      <section class="tab-pane hidden" data-pane="people">
+        <div class="grid" id="people-summary"></div>
+
+        <input class="field search" id="people-search" type="search"
+               placeholder="Поиск по Telegram ID или имени" autocomplete="off" />
+
+        <h3 class="subsection">Администраторы</h3>
+        <div class="table-wrap"><table id="admins-table"></table></div>
+
+        <h3 class="subsection">Пользователи</h3>
+        <div class="table-wrap"><table id="users-table"></table></div>
+      </section>
+
+      <!-- Система -->
+      <section class="tab-pane hidden" data-pane="system">
+        <div class="grid" id="health"></div>
+        <h3 class="subsection">Уведомления о цене</h3>
+        <div class="table-wrap"><table id="alerts-table"></table></div>
+      </section>
 
       <p class="error" id="panel-error"></p>
     </div>
@@ -215,9 +339,7 @@
 </main>
 
 <footer>
-  <div class="wrap">
-    <p><a href="https://t.me/aurumtr_bot" target="_blank" rel="noopener">@aurumtr_bot</a></p>
-  </div>
+  <div class="wrap"><p><a href="https://t.me/aurumtr_bot" target="_blank" rel="noopener">@aurumtr_bot</a></p></div>
 </footer>
 
 <script type="module" src="/app.js"></script>

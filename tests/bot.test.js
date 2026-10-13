@@ -41,6 +41,40 @@ function commandUpdate(text) {
   };
 }
 
+/** Обычное текстовое сообщение — так приходит нажатие кнопки клавиатуры. */
+function textUpdate(text) {
+  return {
+    update_id: Math.floor(Math.random() * 1e6),
+    message: {
+      message_id: 1,
+      date: Math.floor(Date.now() / 1000),
+      chat: { id: 42, type: 'private' },
+      from: { id: 42, is_bot: false, first_name: 'Влад' },
+      text,
+    },
+  };
+}
+
+/** Апдейт нажатия инлайн-кнопки. */
+function callbackUpdate(data) {
+  return {
+    update_id: Math.floor(Math.random() * 1e6),
+    callback_query: {
+      id: String(Math.random()),
+      from: { id: 42, is_bot: false, first_name: 'Влад' },
+      chat_instance: '1',
+      data,
+      message: {
+        message_id: 10,
+        date: Math.floor(Date.now() / 1000),
+        chat: { id: 42, type: 'private' },
+        from: { id: 1, is_bot: true, first_name: 'XAU' },
+        text: 'предыдущее сообщение',
+      },
+    },
+  };
+}
+
 /** Свечи Twelve Data: от новых к старым, как отдаёт настоящий API. */
 function twelveDataPayload(count = 300) {
   const values = Array.from({ length: count }, (_, i) => {
@@ -103,17 +137,30 @@ const lastText = () => sent.filter((c) => c.payload?.text).at(-1)?.payload?.text
 /** Последний исходящий вызов. */
 const lastSent = () => sent.at(-1);
 
+/** Все отправленные тексты одной строкой — когда ответов несколько. */
+const allText = () => sent.map((c) => c.payload?.text ?? '').join('\n');
+
 describe('/start', () => {
-  it('здоровается и показывает список команд', async () => {
+  it('здоровается и сразу предлагает регистрацию', async () => {
     await bot.handleUpdate(commandUpdate('/start'));
-    expect(lastText()).toContain('Влад');
-    expect(lastText()).toContain('/analysis');
+    expect(allText()).toContain('Добро пожаловать');
+    expect(allText()).toContain('автоматически');
   });
 
   it('отвечает на языке пользователя', async () => {
     settings.lang = 'en';
     await bot.handleUpdate(commandUpdate('/start'));
-    expect(lastText()).toContain('market breakdown');
+    expect(allText()).toContain('Welcome to Aurum');
+  });
+
+  it('предлагает открыть приложение первой кнопкой', async () => {
+    vi.stubEnv('URL', 'https://example.netlify.app');
+    await bot.handleUpdate(commandUpdate('/start'));
+
+    const reply = sent.find((c) => c.method === 'sendMessage');
+    const markup = JSON.stringify(reply.payload.reply_markup);
+    expect(markup).toContain('web_app');
+    expect(markup).toContain('Открыть приложение');
   });
 });
 
@@ -148,8 +195,8 @@ describe('кнопка веб-версии', () => {
     vi.stubEnv('URL', '');
     await bot.handleUpdate(commandUpdate('/start'));
 
-    // Приветствие всё равно отправлено, просто без кнопки.
-    expect(lastText()).toContain('Влад');
+    // Приветствие всё равно отправлено, просто без кнопки приложения.
+    expect(allText()).toContain('Добро пожаловать');
   });
 });
 
@@ -287,12 +334,12 @@ describe('/macro', () => {
   });
 
   it('прямо сообщает, что ключ FRED не настроен', async () => {
-    // Остальные команды при этом обязаны продолжать работать.
     await bot.handleUpdate(commandUpdate('/macro'));
     expect(lastText()).toContain('не настроена');
 
+    // Остальные команды при этом обязаны продолжать работать.
     await bot.handleUpdate(commandUpdate('/start'));
-    expect(lastText()).toContain('Влад');
+    expect(allText()).toContain('Добро пожаловать');
   });
 });
 
@@ -461,9 +508,169 @@ describe('обработка ошибок', () => {
   });
 });
 
+describe('клавиатура над полем ввода', () => {
+  beforeEach(() => vi.stubEnv('URL', 'https://example.netlify.app'));
+
+  it('/start ставит клавиатуру с двумя кнопками', async () => {
+    // Рядом со скрепкой Telegram даёт только один слот, поэтому вторая
+    // кнопка живёт на клавиатуре над полем ввода.
+    await bot.handleUpdate(commandUpdate('/start'));
+
+    const withKeyboard = sent.find((c) => c.payload?.reply_markup?.keyboard);
+    expect(withKeyboard).toBeDefined();
+
+    const markup = JSON.stringify(withKeyboard.payload.reply_markup);
+    expect(markup).toContain('Веб-версия');
+    expect(markup).toContain('Меню');
+    expect(markup).toContain('web_app');
+  });
+
+  it('клавиатура не исчезает после нажатия', async () => {
+    await bot.handleUpdate(commandUpdate('/start'));
+
+    const withKeyboard = sent.find((c) => c.payload?.reply_markup?.keyboard);
+    expect(withKeyboard.payload.reply_markup.is_persistent).toBe(true);
+    expect(withKeyboard.payload.reply_markup.resize_keyboard).toBe(true);
+  });
+
+  it('нажатие кнопки «Меню» открывает меню', async () => {
+    // Нажатие приходит обычным текстовым сообщением.
+    await bot.handleUpdate(textUpdate('☰ Меню'));
+    expect(lastText()).toContain('Что показать');
+  });
+
+  it('кнопка «Меню» работает и на английской подписи', async () => {
+    // Человек мог сменить язык после того, как клавиатура появилась.
+    await bot.handleUpdate(textUpdate('☰ Menu'));
+    expect(lastText()).toContain('Что показать');
+  });
+
+  it('обычный текст без команды остаётся без ответа', async () => {
+    await bot.handleUpdate(textUpdate('привет'));
+    expect(sent).toHaveLength(0);
+  });
+
+  it('без адреса сайта остаётся одна кнопка меню', async () => {
+    vi.stubEnv('URL', '');
+    await bot.handleUpdate(commandUpdate('/start'));
+
+    const withKeyboard = sent.find((c) => c.payload?.reply_markup?.keyboard);
+    const markup = JSON.stringify(withKeyboard.payload.reply_markup);
+    expect(markup).toContain('Меню');
+    expect(markup).not.toContain('web_app');
+  });
+});
+
+describe('инлайн-меню', () => {
+  beforeEach(() => {
+    vi.stubEnv('URL', 'https://example.netlify.app');
+    vi.stubEnv('FRED_API_KEY', 'fred');
+    fetch.mockImplementation(async (url) => {
+      if (url.toString().includes('stlouisfed')) {
+        return { ok: true, status: 200, json: async () => ({ observations: [{ date: '2026-10-05', value: '2.9' }] }) };
+      }
+      return { ok: true, status: 200, json: async () => twelveDataPayload() };
+    });
+  });
+
+  it('/menu показывает все кнопки', async () => {
+    await bot.handleUpdate(commandUpdate('/menu'));
+
+    const markup = JSON.stringify(sent.at(-1).payload.reply_markup);
+    for (const action of ['go:analysis', 'go:levels', 'go:macro', 'go:alerts', 'go:subscribe', 'go:lang']) {
+      expect(markup).toContain(action);
+    }
+    expect(markup).toContain('web_app');
+  });
+
+  it('нажатие кнопки сразу подтверждается Telegram', async () => {
+    // Без answerCallbackQuery на кнопке бесконечно крутится индикатор.
+    await bot.handleUpdate(callbackUpdate('go:levels'));
+    expect(sent.some((c) => c.method === 'answerCallbackQuery')).toBe(true);
+  });
+
+  it('нажатие редактирует сообщение, а не шлёт новое', async () => {
+    // Иначе чат быстро забивается полотном ответов.
+    await bot.handleUpdate(callbackUpdate('go:levels'));
+
+    expect(sent.some((c) => c.method === 'editMessageText')).toBe(true);
+    expect(sent.some((c) => c.method === 'sendMessage')).toBe(false);
+  });
+
+  it('кнопка анализа показывает разбор с выбором таймфрейма', async () => {
+    await bot.handleUpdate(callbackUpdate('go:analysis'));
+
+    const edit = sent.find((c) => c.method === 'editMessageText');
+    expect(edit.payload.text).toContain('XAU/USD');
+    expect(JSON.stringify(edit.payload.reply_markup)).toContain('tf:4h');
+  });
+
+  it('кнопка таймфрейма пересчитывает разбор', async () => {
+    await bot.handleUpdate(callbackUpdate('tf:1day'));
+
+    const edit = sent.find((c) => c.method === 'editMessageText');
+    expect(edit.payload.text).toContain('1day');
+  });
+
+  it('кнопка подписки работает переключателем', async () => {
+    storage.isSubscribed.mockResolvedValueOnce(false);
+    await bot.handleUpdate(callbackUpdate('go:subscribe'));
+    expect(storage.subscribe).toHaveBeenCalled();
+
+    sent.length = 0;
+    storage.isSubscribed.mockResolvedValueOnce(true);
+    await bot.handleUpdate(callbackUpdate('go:subscribe'));
+    expect(storage.unsubscribe).toHaveBeenCalled();
+  });
+
+  it('под ответами есть кнопка возврата в меню', async () => {
+    await bot.handleUpdate(callbackUpdate('go:macro'));
+
+    const edit = sent.find((c) => c.method === 'editMessageText');
+    expect(JSON.stringify(edit.payload.reply_markup)).toContain('go:menu');
+  });
+
+  it('неизвестное действие не ломает бота', async () => {
+    await bot.handleUpdate(callbackUpdate('go:чепуха'));
+    expect(sent.some((c) => c.method === 'answerCallbackQuery')).toBe(true);
+  });
+});
+
 describe('неизвестная команда', () => {
   it('подсказывает /help', async () => {
     await bot.handleUpdate(commandUpdate('/чтототакое'));
     expect(lastText()).toContain('/help');
+  });
+});
+
+describe('адрес веб-приложения', () => {
+  it('кнопка не появляется для не-HTTPS адреса', async () => {
+    // Telegram принимает в кнопках веб-приложения только HTTPS,
+    // а netlify dev локально подставляет http://localhost.
+    vi.stubEnv('URL', 'http://localhost:8899');
+
+    await bot.handleUpdate(commandUpdate('/start'));
+
+    const reply = sent.find((c) => c.method === 'sendMessage');
+    expect(reply).toBeDefined();
+    expect(JSON.stringify(reply.payload.reply_markup)).not.toContain('web_app');
+    expect(reply.payload.text).toContain('Добро пожаловать');
+    expect(allText()).toContain('Добро пожаловать');
+  });
+
+  it('кнопка появляется для HTTPS', async () => {
+    vi.stubEnv('URL', 'https://example.netlify.app');
+    await bot.handleUpdate(commandUpdate('/start'));
+
+    const reply = sent.find((c) => c.method === 'sendMessage');
+    expect(JSON.stringify(reply.payload.reply_markup)).toContain('web_app');
+  });
+
+  it('лишний слэш в конце не ломает адрес', async () => {
+    vi.stubEnv('URL', 'https://example.netlify.app/');
+    await bot.handleUpdate(commandUpdate('/start'));
+
+    const reply = sent.find((c) => c.method === 'sendMessage');
+    expect(JSON.stringify(reply.payload.reply_markup)).toContain('https://example.netlify.app/"');
   });
 });

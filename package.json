@@ -4,13 +4,15 @@
   "private": true,
   "type": "module",
   "description": "Telegram-бот аналитики по золоту (XAU/USD) на Netlify Functions",
-  "engines": { "node": ">=22.12.0" },
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "dev": "netlify dev",
     "test": "vitest run",
     "test:watch": "vitest",
-    "set-webhook": "node scripts/set-webhook.js",
-    "delete-webhook": "node scripts/set-webhook.js --delete"
+    "delete-webhook": "node scripts/setup-bot.js --delete",
+    "setup-bot": "node scripts/setup-bot.js"
   },
   "dependencies": {
     "@netlify/blobs": "^11.1.3",

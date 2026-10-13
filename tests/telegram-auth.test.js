@@ -124,3 +124,30 @@ describe('профиль', () => {
     expect(displayName({ id: 42 })).toBe('id42');
   });
 });
+
+describe('поле signature', () => {
+  /** Подписывает, включая signature в строку проверки. */
+  function signIncludingSignature(fields, signature, token = TOKEN) {
+    const all = { ...fields, signature };
+    const pairs = Object.entries(all).map(([k, v]) => `${k}=${v}`).sort();
+    const secret = createHmac('sha256', 'WebAppData').update(token).digest();
+    const hash = createHmac('sha256', secret).update(pairs.join('\n')).digest('hex');
+    return new URLSearchParams({ ...all, hash }).toString();
+  }
+
+  it('принимает подпись, посчитанную БЕЗ поля signature', () => {
+    const signed = signInitData(baseFields()) + '&signature=c3Rvcm9ubnlheWE';
+    expect(validateInitData(signed, TOKEN).ok).toBe(true);
+  });
+
+  it('принимает подпись, посчитанную ВМЕСТЕ с полем signature', () => {
+    // Источники расходятся, какой вариант верен, поэтому поддержаны оба.
+    const signed = signIncludingSignature(baseFields(), 'c3Rvcm9ubnlheWE');
+    expect(validateInitData(signed, TOKEN).ok).toBe(true);
+  });
+
+  it('поддельная подпись не проходит ни по одному варианту', () => {
+    const forged = signIncludingSignature(baseFields(), 'подделка', '999:ЧУЖОЙ');
+    expect(validateInitData(forged, TOKEN).ok).toBe(false);
+  });
+});

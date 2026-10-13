@@ -357,36 +357,6 @@ footer {
   border: 1px solid var(--border);
 }
 
-/* ---------- Форма входа ---------- */
-
-.auth-card { max-width: 420px; margin: 0 auto; }
-
-.tabs {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 18px;
-  padding: 4px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-}
-
-.tab {
-  flex: 1;
-  padding: 9px;
-  border: none;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  font-size: 15px;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
-
-.tab.active { background: var(--surface-2); color: var(--text); }
-
-.auth-hint { font-size: 13px; margin: 12px 0 0; }
 
 /* ---------- Индикатор живого обновления ---------- */
 
@@ -463,7 +433,9 @@ footer {
   overflow: hidden;
 }
 
-#chart { height: 440px; }
+/* Высота графика: занимает большую часть экрана, но оставляет место
+   переключателю и строке состояния. */
+#chart { height: min(68vh, 780px); min-height: 420px; }
 
 /* Подписи поверх полотна графика */
 .chart-overlay {
@@ -496,46 +468,251 @@ footer {
 
 .chart-status { font-size: 13px; margin: 10px 0 0; }
 
+/* Полноэкранный режим: график на всё окно поверх остального */
+.chart-box.fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  border: none;
+  border-radius: 0;
+}
+
+.chart-box.fullscreen #chart { height: 100vh; }
+
+/* Кнопка выхода поверх развёрнутого графика */
+body.chart-open #chart-expand {
+  position: fixed;
+  top: 14px;
+  right: 16px;
+  z-index: 51;
+}
+
+body.chart-open { overflow: hidden; }
+
 @media (max-width: 560px) {
-  #chart { height: 320px; }
+  #chart { height: min(60vh, 420px); min-height: 300px; }
   .chart-keys { display: none; }
 }
 
 
-/* ---------- Вход через Telegram ---------- */
 
-.or {
+/* ---------- Карточка входа ---------- */
+
+.auth-card {
+  max-width: 440px;
+  margin: 40px auto;
+  text-align: center;
+}
+
+.auth-icon { font-size: 40px; margin-bottom: 12px; }
+.auth-card h3 { font-size: 20px; margin-bottom: 10px; }
+.auth-card p { margin: 0 0 20px; }
+
+.tg-btn {
+  display: inline-block;
+  text-decoration: none;
+  background: #229ed9;
+  border-color: #229ed9;
+  color: #fff;
+}
+
+.tg-btn:hover { background: #2aa9e5; border-color: #2aa9e5; }
+
+/* ---------- Роли ---------- */
+
+.role {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.role-owner {
+  background: var(--gold);
+  color: #16120a;
+  box-shadow: 0 0 14px rgba(232, 179, 57, 0.35);
+}
+
+.role-admin {
+  background: var(--danger);
+  color: #fff;
+  box-shadow: 0 0 0 1px rgba(248, 81, 73, 0.4), 0 0 14px rgba(248, 81, 73, 0.35);
+}
+
+.role-user { background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
+.role-guest { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+
+/* ---------- Вкладки панели ---------- */
+
+.tabs-bar {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 18px 0 14px;
+  gap: 4px;
+  overflow-x: auto;
+  margin-bottom: 18px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.tab-btn {
+  flex: 1;
+  min-width: 110px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
   color: var(--muted);
+  font: inherit;
+  font-size: 15px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { background: var(--surface-2); color: var(--text); font-weight: 600; }
+
+.tab-pane { padding: 0; border: none; }
+
+/* Кнопка смены роли в таблице аккаунтов */
+.role-action {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.role-action:hover { border-color: var(--gold); }
+.role-action:disabled { opacity: 0.4; cursor: default; }
+
+/* Внутри Telegram верхняя панель не нужна — её рисует сам Telegram */
+body.in-telegram .topbar { display: none; }
+body.in-telegram .wrap { padding: 0 14px; }
+
+.auth-hint { font-size: 13px; margin: 16px 0 0; line-height: 1.5; }
+
+
+/* ---------- Переключатели слоёв разметки ---------- */
+
+.layer-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 12px;
   font-size: 13px;
 }
 
-.or::before,
-.or::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--border);
+.layer {
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
 }
 
-.tg-btn {
-  display: block;
-  width: 100%;
-  text-align: center;
-  text-decoration: none;
-  border-color: #229ed9;
-  color: #229ed9;
+.layer:hover { color: var(--text); }
+
+.layer.active {
+  background: var(--surface-2);
+  border-color: var(--gold);
+  color: var(--text);
 }
 
-.tg-btn:hover { background: rgba(34, 158, 217, 0.1); border-color: #229ed9; }
+#structure-info { margin-top: 4px; font-family: var(--mono); font-size: 12px; }
 
-/* Внутри Telegram форма с паролем не нужна */
-body.in-telegram .auth-card .tabs,
-body.in-telegram .auth-card .field,
-body.in-telegram .auth-card #submit-auth,
-body.in-telegram .auth-card .or,
-body.in-telegram .auth-card .auth-hint,
-body.in-telegram .topbar { display: none; }
+
+/* ---------- Настройки торговли ---------- */
+
+.settings-card { max-width: 760px; }
+
+.settings-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin-top: 16px;
+}
+
+.settings-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.settings-grid .field { margin: 0; }
+
+.settings-title { margin: 22px 0 10px; font-size: 15px; }
+
+.switch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.switch input { width: 18px; height: 18px; accent-color: var(--gold); }
+
+/* Цвет результата сделки */
+.win { color: var(--ok); }
+.loss { color: var(--danger); }
+
+
+/* ---------- Кривая капитала ---------- */
+
+.equity-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+
+#bt-equity { width: 100%; height: 220px; display: block; }
+
+/* Строка проверочной части выделена: именно она ближе к реальности */
+tr.highlight td { background: var(--gold-dim); font-weight: 600; }
+
+
+/* ---------- Разбор от модели ---------- */
+
+#ai-box p { margin: 0 0 10px; }
+#ai-box ul { margin: 6px 0 14px; padding-left: 20px; }
+#ai-box li { margin-bottom: 5px; color: var(--muted); }
+#ai-box h4 { margin: 14px 0 6px; font-size: 14px; }
+.ai-note { font-size: 12px; color: var(--muted); border-top: 1px solid var(--border); padding-top: 10px; }
+
+
+/* ---------- Поиск по пользователям ---------- */
+
+.search { max-width: 380px; margin: 18px 0 0; }
+
+/* Кнопка удаления: опасное действие, поэтому выделена */
+.danger-action {
+  padding: 4px 10px;
+  border: 1px solid rgba(248, 81, 73, 0.4);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--danger);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  margin-left: 6px;
+}
+
+.danger-action:hover { background: rgba(248, 81, 73, 0.12); border-color: var(--danger); }
+.danger-action:disabled { opacity: 0.4; cursor: default; }

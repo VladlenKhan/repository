@@ -1,14 +1,12 @@
 /**
- * Регистрация и вход.
+ * Вход через Telegram.
  *
- * POST /api/auth  { action: 'register' | 'login', login, password }
+ * POST /api/auth  { initData }
  * Ответ: { token, account } или { error }
+ *
+ * Других способов входа нет: паролей в системе не существует.
  */
-import {
-  login as doLogin,
-  loginWithTelegram,
-  register as doRegister,
-} from '../../lib/accounts.js';
+import { loginWithCode, loginWithTelegram } from '../../lib/accounts.js';
 import { ConfigError } from '../../lib/config.js';
 
 const json = (body, status = 200) =>
@@ -26,18 +24,15 @@ export default async (request) => {
   if (!body) return json({ error: 'Некорректный запрос' }, 400);
 
   try {
-    let result;
-    if (body.action === 'telegram') {
-      result = await loginWithTelegram(body.initData);
-    } else if (body.action === 'register') {
-      result = await doRegister(body.login, body.password);
-    } else {
-      result = await doLogin(body.login, body.password);
-    }
+    // Два пути: профиль из мини-приложения или код из ссылки,
+    // которую прислал бот для входа в обычном браузере.
+    const result = body.loginCode
+      ? await loginWithCode(body.loginCode)
+      : await loginWithTelegram(body.initData);
 
     if (!result.ok) {
-      // Задержка замедляет перебор логинов и паролей.
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // Задержка замедляет перебор подписей.
+      await new Promise((resolve) => setTimeout(resolve, 400));
       return json({ error: result.reason }, 401);
     }
 

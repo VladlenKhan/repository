@@ -8,8 +8,8 @@
  * Фильтрация делается на сервере, а не в браузере: иначе чужие данные
  * уезжали бы клиенту и их было бы видно в инструментах разработчика.
  */
-import { ROLES, verifyToken } from '../../lib/auth.js';
-import { collectAdminData } from '../../lib/admin.js';
+import { ROLES, hasAtLeast, verifyToken } from '../../lib/auth.js';
+import { collectAdminData, mergePeople } from '../../lib/admin.js';
 import { ConfigError, getSessionSecret } from '../../lib/config.js';
 import { listAccounts } from '../../lib/storage.js';
 
@@ -48,12 +48,16 @@ export default async (request) => {
       generatedAt: full.generatedAt,
       role: session.role,
       login: session.login,
+      // Имя для шапки: иначе там остаётся технический логин вида tg123.
+      displayName: (await listAccounts()).find((a) => a.login === session.login)?.displayName
+        ?? session.login,
       market: full.market,
       macro: full.macro,
       errors: full.errors.filter((e) => ['market', 'macro'].includes(e.section)),
     };
 
-    if (session.role !== ROLES.ADMIN) {
+    // Раздел с персональными данными — от администратора и выше.
+    if (!hasAtLeast(session.role, ROLES.ADMIN)) {
       return json(payload);
     }
 
@@ -67,6 +71,16 @@ export default async (request) => {
       usage: full.usage,
       webhook: full.webhook,
       accounts: await listAccounts(),
+      // Один список вместо двух: это одни и те же люди.
+      people: mergePeople({
+        users: full.users,
+        accounts: await listAccounts(),
+        subscribers: full.subscribers,
+        alerts: full.alerts,
+      }),
+      // Назначать роли может только владелец — панель рисует кнопки
+      // по этому признаку, но решение всё равно принимает сервер.
+      canManageRoles: session.role === ROLES.OWNER,
       errors: full.errors,
     });
   } catch (error) {

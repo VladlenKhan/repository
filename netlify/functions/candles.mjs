@@ -11,11 +11,22 @@
 import { verifyToken } from '../../lib/auth.js';
 import { ConfigError, getPricesConfig, getSessionSecret } from '../../lib/config.js';
 import { emaSeries } from '../../lib/indicators.js';
+import { analyzeStructure, summarizeForChart } from '../../lib/structure.js';
 import { calculatePivotPoints, previousClosedCandle } from '../../lib/levels.js';
-import { PricesError, getCandlesCached } from '../../lib/prices.js';
+import { PricesError, getChartCandles } from '../../lib/prices.js';
 import { DEFAULT_TIMEFRAME, normalizeTimeframe } from '../../lib/timeframes.js';
 
-const CANDLE_LIMIT = 300;
+/**
+ * Сколько свечей показывает график.
+ *
+ * На мелких таймфреймах 5000 свечей — это пара месяцев, на дневном —
+ * два десятилетия, которых у поставщика всё равно нет: он отдаст
+ * столько, сколько есть.
+ */
+const CANDLE_LIMIT = 5000;
+
+/** Сколько свечей отдаём при догрузке хвоста. */
+const TAIL_SIZE = 120;
 
 const json = (body, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -55,31 +66,50 @@ export default async (request) => {
     return json({ error: 'Нужно войти' }, 401);
   }
 
-  const requested = new URL(request.url).searchParams.get('timeframe');
+  const params = new URL(request.url).searchParams;
+  const requested = params.get('timeframe');
+
+  /**
+   * Режим догрузки хвоста.
+   *
+   * При обновлении меняется только последняя свеча, а полный ответ весит
+   * под мегабайт. Отдаём последние свечи — график дорисует их через
+   * update(), не перерисовывая всю серию.
+   */
+  const tail = params.get('tail') === '1';
   const timeframe = normalizeTimeframe(requested ?? DEFAULT_TIMEFRAME);
   if (timeframe === null) {
     return json({ error: 'Неизвестный таймфрейм' }, 400);
   }
 
   try {
-    const candles = await getCandlesCached({ timeframe, limit: CANDLE_LIMIT });
+    const candles = await getChartCandles({ timeframe, limit: CANDLE_LIMIT });
     const closes = candles.map((candle) => candle.close);
     const reference = previousClosedCandle(candles);
 
+    // Индикаторы считаем по всей серии, а отдаём столько же, сколько
+    // свечей: на обрезанной истории EMA была бы неверной.
+    const slice = (points) => (tail ? points.slice(-TAIL_SIZE) : points);
+    const visible = tail ? candles.slice(-TAIL_SIZE) : candles;
+
     return json({
       timeframe,
+      tail,
       symbol: getPricesConfig().symbol,
       // Библиотека графика ждёт время в секундах, а не в миллисекундах.
-      candles: candles.map((candle) => ({
+      candles: visible.map((candle) => ({
         time: Math.floor(candle.time / 1000),
         open: candle.open,
         high: candle.high,
         low: candle.low,
         close: candle.close,
       })),
-      ema50: toLinePoints(candles, emaSeries(closes, 50)),
-      ema200: toLinePoints(candles, emaSeries(closes, 200)),
+      ema50: slice(toLinePoints(candles, emaSeries(closes, 50))),
+      ema200: slice(toLinePoints(candles, emaSeries(closes, 200))),
       pivots: reference ? calculatePivotPoints(reference) : null,
+      // Разметка структуры считается по всей серии и сжимается до
+      // того, что осмысленно рисовать. Занимает около 30 мс.
+      structure: summarizeForChart(analyzeStructure(candles), candles),
     });
   } catch (error) {
     if (error instanceof PricesError) {

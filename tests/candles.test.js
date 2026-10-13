@@ -25,14 +25,21 @@ function payload(count = 300) {
   return { status: 'ok', values };
 }
 
-const request = (token, timeframe = '1h') =>
-  new Request(`https://x/api/candles?timeframe=${timeframe}`, {
+const request = (token, timeframe = '1h', tail = false) =>
+  new Request(`https://x/api/candles?timeframe=${timeframe}${tail ? '&tail=1' : ''}`, {
     headers: token ? { authorization: `Bearer ${token}` } : {},
   });
 
 let userToken;
 
-beforeEach(() => {
+const storage = await import('../lib/storage.js');
+
+beforeEach(async () => {
+  // clearAllMocks сбрасывает вызовы, но не реализации: без явного
+  // сброса заглушка кэша из одного теста протекает в следующие.
+  storage.getCachedCandles.mockReset().mockResolvedValue(null);
+  storage.setCachedCandles.mockReset().mockResolvedValue(undefined);
+
   vi.stubEnv('SESSION_SECRET', SECRET);
   vi.stubEnv('TWELVE_DATA_API_KEY', 'key');
   userToken = issueToken({ login: 'vasya', role: ROLES.USER }, SECRET);
@@ -176,5 +183,119 @@ describe('сбои поставщика данных', () => {
     const response = await candlesFn(request(userToken));
     expect(response.status).toBe(503);
     expect((await response.json()).error).toContain('недоступен');
+  });
+});
+
+describe('длинная история для графика', () => {
+  it('склеивает историю и свежий хвост', async () => {
+    const { getChartCandles } = await import('../lib/prices.js');
+    const storage = await import('../lib/storage.js');
+
+    storage.getCachedCandles.mockImplementation(async (key) =>
+      key.includes(':history:')
+        ? [{ time: 1000, close: 1 }, { time: 2000, close: 2 }]
+        : [{ time: 2000, close: 22 }, { time: 3000, close: 3 }],
+    );
+
+    const result = await getChartCandles({
+      timeframe: '1h',
+      provider: { name: 'p', symbol: 'S', getCandles: async () => [] },
+    });
+
+    expect(result.map((c) => c.time)).toEqual([1000, 2000, 3000]);
+    // На пересечении побеждает свежая свеча: она могла дорисоваться.
+    expect(result[1].close).toBe(22);
+  });
+
+  it('историю кэширует надолго, хвост — ненадолго', async () => {
+    const { getChartCandles } = await import('../lib/prices.js');
+    const storage = await import('../lib/storage.js');
+
+    storage.getCachedCandles.mockResolvedValue(null);
+    const provider = {
+      name: 'p', symbol: 'S',
+      getCandles: async ({ limit }) => [{ time: limit, close: 1 }],
+    };
+
+    await getChartCandles({ timeframe: '1h', provider });
+
+    const ttls = Object.fromEntries(
+      storage.setCachedCandles.mock.calls.map(([key, , ttl]) => [
+        key.includes(':history:') ? 'history' : 'recent',
+        ttl,
+      ]),
+    );
+
+    expect(ttls.history).toBeGreaterThanOrEqual(12 * 60 * 60_000);
+    expect(ttls.recent).toBe(15 * 60_000);
+    expect(ttls.history).toBeGreaterThan(ttls.recent);
+  });
+
+  it('не ходит в сеть, когда оба куска в кэше', async () => {
+    const { getChartCandles } = await import('../lib/prices.js');
+    const storage = await import('../lib/storage.js');
+
+    storage.getCachedCandles.mockResolvedValue([{ time: 1000, close: 1 }]);
+    const getCandles = vi.fn(async () => []);
+
+    await getChartCandles({ timeframe: '1h', provider: { name: 'p', symbol: 'S', getCandles } });
+
+    expect(getCandles).not.toHaveBeenCalled();
+  });
+});
+
+describe('догрузка хвоста', () => {
+  it('отдаёт только последние свечи', async () => {
+    const full = await (await candlesFn(request(userToken))).json();
+    const tail = await (await candlesFn(request(userToken, '1h', true))).json();
+
+    expect(full.candles.length).toBe(300);
+    expect(tail.candles.length).toBe(120);
+    expect(tail.tail).toBe(true);
+  });
+
+  it('хвост заканчивается той же свечой, что и полная серия', async () => {
+    const full = await (await candlesFn(request(userToken))).json();
+    const tail = await (await candlesFn(request(userToken, '1h', true))).json();
+
+    expect(tail.candles.at(-1)).toEqual(full.candles.at(-1));
+  });
+
+  it('EMA в хвосте совпадает с полной серией', async () => {
+    // Индикатор считается по всей истории и только потом обрезается:
+    // на коротком куске EMA была бы другой.
+    const full = await (await candlesFn(request(userToken))).json();
+    const tail = await (await candlesFn(request(userToken, '1h', true))).json();
+
+    expect(tail.ema50.at(-1)).toEqual(full.ema50.at(-1));
+  });
+
+  it('свечей в хвосте заметно меньше', async () => {
+    // Сравниваем сами свечи, а не весь ответ: разметка структуры
+    // отдаётся в обоих режимах и в фикстуре занимает заметную долю.
+    const full = await (await candlesFn(request(userToken))).json();
+    const tail = await (await candlesFn(request(userToken, '1h', true))).json();
+
+    const weight = (d) => JSON.stringify(d.candles).length;
+    expect(weight(tail)).toBeLessThan(weight(full) / 2);
+  });
+
+  it('разметка структуры приходит в обоих режимах', async () => {
+    // Иначе новые BOS и CHoCH не появлялись бы до перезагрузки страницы.
+    const full = await (await candlesFn(request(userToken))).json();
+    const tail = await (await candlesFn(request(userToken, '1h', true))).json();
+
+    expect(full.structure).toBeDefined();
+    expect(tail.structure).toBeDefined();
+    expect(Array.isArray(tail.structure.zones)).toBe(true);
+  });
+
+  it('разметка сжата до разумного размера', async () => {
+    // Полный разбор даёт сотни зон; на график идёт только актуальное.
+    const full = await (await candlesFn(request(userToken))).json();
+
+    expect(full.structure.zones.length).toBeLessThanOrEqual(50);
+    expect(full.structure.pools.length).toBeLessThanOrEqual(8);
+    expect(full.structure.events.length).toBeLessThanOrEqual(40);
   });
 });
